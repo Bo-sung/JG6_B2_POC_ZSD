@@ -1,0 +1,11 @@
+{
+  "status": "template",
+  "note": "씬 진행 경로. 씬 이름이 키이며 배열 순서는 의미하지 않는다. nextScene이 비어 있으면 최종 씬.",
+  "scenes": [
+    {
+      "scene": "SampleScene",
+      "nextScene": "",
+      "restartScene": "SampleScene"
+    }
+  ]
+}

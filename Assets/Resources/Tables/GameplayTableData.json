@@ -1,0 +1,30 @@
+{
+  "status": "template",
+  "note": "예시 테이블. 프로젝트에 맞게 필드와 값을 바꾼 뒤 Docs/TABLES.md 규칙을 따른다.",
+  "player": {
+    "maxHealth": 100,
+    "moveSpeed": 6,
+    "dashCharges": 2,
+    "dashCooldown": 1.2,
+    "interactRange": 2.5
+  },
+  "sequence": {
+    "firstUpgrade": "sample.doubleDash"
+  },
+  "upgrades": [
+    {
+      "id": "sample.doubleDash",
+      "nextUpgrade": "sample.speedUp",
+      "displayName": "이중 대시",
+      "description": "대시를 한 번 더 사용한다.",
+      "category": "Mobility"
+    },
+    {
+      "id": "sample.speedUp",
+      "nextUpgrade": "",
+      "displayName": "질주",
+      "description": "이동 속도가 증가한다.",
+      "category": "Offense"
+    }
+  ]
+}
