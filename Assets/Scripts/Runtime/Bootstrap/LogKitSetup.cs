@@ -16,8 +16,8 @@ public static class LogKitSetup
     // 서버 주소와 업로드 키는 코드에 두지 않는다.
     //   빌드: LogKit 빌드 단계가 CI 환경변수 LOGKIT_SERVER_URL, LOGKIT_UPLOAD_KEY 값을 넣는다.
     //   에디터: 같은 환경변수를 PC에 설정하면 여기서 적용하고, 없으면 GameLogger Inspector 값을 쓴다.
-    const string ServerUrlVariable = "LOGKIT_SERVER_URL";
-    const string UploadKeyVariable = "LOGKIT_UPLOAD_KEY";
+    const string SERVER_URL_VARIABLE = "LOGKIT_SERVER_URL";
+    const string UPLOAD_KEY_VARIABLE = "LOGKIT_UPLOAD_KEY";
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetShutdownHooks()
@@ -35,8 +35,8 @@ public static class LogKitSetup
         EditorApplication.playModeStateChanged += OnPlayModeChanged;
         EditorApplication.quitting += PrepareEditorQuit;
 #endif
-        string serverUrl = Environment.GetEnvironmentVariable(ServerUrlVariable);
-        string apiKey = Environment.GetEnvironmentVariable(UploadKeyVariable);
+        string serverUrl = Environment.GetEnvironmentVariable(SERVER_URL_VARIABLE);
+        string apiKey = Environment.GetEnvironmentVariable(UPLOAD_KEY_VARIABLE);
         if (!string.IsNullOrWhiteSpace(serverUrl) || !string.IsNullOrWhiteSpace(apiKey))
         {
             // 비어 있는 항목은 기존 값(빌드 설정 또는 Inspector)을 유지한다.
@@ -64,9 +64,13 @@ public static class LogKitSetup
 
 #if UNITY_EDITOR
     static void PrepareEditorQuit() => PrepareQuit();
-    static void OnPlayModeChanged(PlayModeStateChange change)
+    static void OnPlayModeChanged(PlayModeStateChange _change)
     {
-        if (change != PlayModeStateChange.ExitingPlayMode) return;
+        if (_change != PlayModeStateChange.ExitingPlayMode)
+        {
+            return;
+        }
+
         PrepareQuit();
         RemoveShutdownHooks();
     }

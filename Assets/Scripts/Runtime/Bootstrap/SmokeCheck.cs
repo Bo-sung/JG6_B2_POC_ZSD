@@ -8,23 +8,31 @@ using UnityEngine;
 //   에디터 CLI: Unity.exe -batchMode -projectSmoke -executeMethod ... 또는 Play Mode에서 인자만으로 동작
 public sealed class SmokeCheck : MonoBehaviour
 {
-    public const string CommandLineFlag = "-projectSmoke";
+    public const string COMMAND_LINE_FLAG = "-projectSmoke";
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
     {
-        if (!Array.Exists(Environment.GetCommandLineArgs(), arg => arg == CommandLineFlag)) return;
+        if (!Array.Exists(Environment.GetCommandLineArgs(), _arg => _arg == COMMAND_LINE_FLAG))
+        {
+            return;
+        }
+
         var host = new GameObject("Development smoke check");
         DontDestroyOnLoad(host);
         host.AddComponent<SmokeCheck>();
     }
 
-    static void Require(bool condition, string message)
+    static void Require(bool _condition, string _message)
     {
-        if (condition) return;
-        Debug.LogError("MYJG_SMOKE_FAIL: " + message);
+        if (_condition)
+        {
+            return;
+        }
+
+        Debug.LogError("MYJG_SMOKE_FAIL: " + _message);
         Application.Quit(2);
-        throw new InvalidOperationException(message);
+        throw new InvalidOperationException(_message);
     }
 
     IEnumerator Start()
@@ -65,7 +73,10 @@ public sealed class SmokeCheck : MonoBehaviour
 
         // 4) 이벤트 허브: 발행이 구독자에게 도달하는지 확인
         bool received = false;
-        void Handler(GameEvents.UpgradeInfo info) { received = true; }
+        void Handler(GameEvents.UpgradeInfo _info)
+        {
+            received = true;
+        }
         GameEvents.UpgradeGranted += Handler;
         GameEvents.RaiseUpgradeGranted(tables.Upgrades[0]);
         GameEvents.UpgradeGranted -= Handler;

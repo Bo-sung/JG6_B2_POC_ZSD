@@ -5,38 +5,38 @@
 public static class GameLayers
 {
     // 레이어 번호(TagManager.asset 순서 기준, 0부터 시작).
-    public const int GroundLayerNumber = 7;
-    public const int ObstacleLayerNumber = 8;
-    public const int PlayerLayerNumber = 9;
-    public const int EnemyLayerNumber = 10;
-    public const int PropLayerNumber = 11;
-    public const int WeaponLayerNumber = 12;
-    public const int ProjectileLayerNumber = 13;
+    public const int GROUND_LAYER_NUMBER = 7;
+    public const int OBSTACLE_LAYER_NUMBER = 8;
+    public const int PLAYER_LAYER_NUMBER = 9;
+    public const int ENEMY_LAYER_NUMBER = 10;
+    public const int PROP_LAYER_NUMBER = 11;
+    public const int WEAPON_LAYER_NUMBER = 12;
+    public const int PROJECTILE_LAYER_NUMBER = 13;
 
     // Physics 질의에 쓰는 비트마스크. 위 번호에서 파생된 컴파일 타임 상수.
-    public const int GroundMask = 1 << GroundLayerNumber;
-    public const int ObstacleMask = 1 << ObstacleLayerNumber;
-    public const int PlayerMask = 1 << PlayerLayerNumber;
-    public const int EnemyMask = 1 << EnemyLayerNumber;
-    public const int PropMask = 1 << PropLayerNumber;
-    public const int WeaponMask = 1 << WeaponLayerNumber;
-    public const int ProjectileMask = 1 << ProjectileLayerNumber;
+    public const int GROUND_MASK = 1 << GROUND_LAYER_NUMBER;
+    public const int OBSTACLE_MASK = 1 << OBSTACLE_LAYER_NUMBER;
+    public const int PLAYER_MASK = 1 << PLAYER_LAYER_NUMBER;
+    public const int ENEMY_MASK = 1 << ENEMY_LAYER_NUMBER;
+    public const int PROP_MASK = 1 << PROP_LAYER_NUMBER;
+    public const int WEAPON_MASK = 1 << WEAPON_LAYER_NUMBER;
+    public const int PROJECTILE_MASK = 1 << PROJECTILE_LAYER_NUMBER;
 
     // 자주 쓰는 결합 질의. 개별 질의마다 즉석 마스크를 만들지 않는다.
-    public const int GroundPlayerMask = GroundMask | PlayerMask;
-    public const int GroundObstacleMask = GroundMask | ObstacleMask;
-    public const int CharacterMask = PlayerMask | EnemyMask;
-    public const int WorldMask = GroundMask | ObstacleMask | PropMask;
+    public const int GROUND_PLAYER_MASK = GROUND_MASK | PLAYER_MASK;
+    public const int GROUND_OBSTACLE_MASK = GROUND_MASK | OBSTACLE_MASK;
+    public const int CHARACTER_MASK = PLAYER_MASK | ENEMY_MASK;
+    public const int WORLD_MASK = GROUND_MASK | OBSTACLE_MASK | PROP_MASK;
 
     // Validate Project가 TagManager.asset의 이름과 대조하는 표. 번호를 바꾸면 여기도 함께 고친다.
-    public static readonly (int number, string name)[] TagManagerNames =
+    public static readonly (int number, string name)[] TAG_MANAGER_NAMES =
     {
-        (GroundLayerNumber, "Ground"),
-        (ObstacleLayerNumber, "Obstacle"),
-        (PlayerLayerNumber, "Player"),
-        (EnemyLayerNumber, "Enemy"),
-        (PropLayerNumber, "Prop"),
-        (WeaponLayerNumber, "Weapon"),
-        (ProjectileLayerNumber, "Projectile"),
+        (GROUND_LAYER_NUMBER, "Ground"),
+        (OBSTACLE_LAYER_NUMBER, "Obstacle"),
+        (PLAYER_LAYER_NUMBER, "Player"),
+        (ENEMY_LAYER_NUMBER, "Enemy"),
+        (PROP_LAYER_NUMBER, "Prop"),
+        (WEAPON_LAYER_NUMBER, "Weapon"),
+        (PROJECTILE_LAYER_NUMBER, "Projectile"),
     };
 }

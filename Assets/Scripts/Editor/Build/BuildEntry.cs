@@ -8,9 +8,9 @@ using UnityEngine;
 // CI·로컬 공통 빌드 진입점. 씬 이름을 코드에 하드코딩하지 않고 EditorBuildSettings의 활성 씬을 순서대로 쓴다.
 public static class BuildEntry
 {
-    public const string OutputMenu = "Tools/MyJG/Build Windows (Development)";
+    public const string OUTPUT_MENU = "Tools/MyJG/Build Windows (Development)";
 
-    [MenuItem(OutputMenu)]
+    [MenuItem(OUTPUT_MENU)]
     public static string BuildConfiguredTarget()
     {
         string project = Directory.GetParent(Application.dataPath).FullName;
@@ -27,7 +27,11 @@ public static class BuildEntry
 
         string summary = $"Result: {report.summary.result}\nErrors: {report.summary.totalErrors}\nWarnings: {report.summary.totalWarnings}\nBytes: {report.summary.totalSize}\nDuration: {report.summary.totalTime}\nOutput: {report.summary.outputPath}\n";
         File.WriteAllText(Path.Combine(destination, "BuildReport.txt"), summary);
-        if (report.summary.result != BuildResult.Succeeded) throw new InvalidOperationException(summary);
+        if (report.summary.result != BuildResult.Succeeded)
+        {
+            throw new InvalidOperationException(summary);
+        }
+
         Debug.Log(summary);
         return summary;
     }
@@ -37,8 +41,18 @@ public static class BuildEntry
     {
         var scenes = new List<string>();
         foreach (var scene in EditorBuildSettings.scenes)
-            if (scene.enabled && !string.IsNullOrEmpty(scene.path)) scenes.Add(scene.path);
-        if (scenes.Count == 0) throw new InvalidOperationException("EditorBuildSettings에 활성 씬이 없습니다.");
+        {
+            if (scene.enabled && !string.IsNullOrEmpty(scene.path))
+            {
+                scenes.Add(scene.path);
+            }
+        }
+
+        if (scenes.Count == 0)
+        {
+            throw new InvalidOperationException("EditorBuildSettings에 활성 씬이 없습니다.");
+        }
+
         return scenes.ToArray();
     }
 }

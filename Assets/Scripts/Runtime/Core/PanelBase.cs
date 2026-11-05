@@ -21,43 +21,81 @@ public abstract class PanelBase : MonoBehaviour
     // 열 수 있는 조건(플레이 사망·다른 패널 열림 등). 조건이 false면 SetOpen(true)가 거부된다.
     protected virtual bool CanOpen => true;
     // 표시/은폐 직전 hook. 개별 UI는 여기에서 텍스트·풀·커서를 정리한다.
-    protected virtual void OnShow() { }
-    protected virtual void OnHide() { }
+    protected virtual void OnShow()
+    {
+    }
+    protected virtual void OnHide()
+    {
+    }
 
     // 시작 상태 명시. 씬 저장 상태가 열려 있어도 startOpen이 false면 껏다가 켠다(온·오프 기능이 시작 상태를 잃지 않게).
     protected virtual void Awake()
     {
-        if (!root) root = gameObject;
+        if (!root)
+        {
+            root = gameObject;
+        }
+
         IsOpen = false;
         Root.SetActive(startOpen);
         IsOpen = startOpen;
-        if (startOpen) OnShow(); else OnHide();
+        if (startOpen)
+        {
+            OnShow();
+        }
+        else
+        {
+            OnHide();
+        }
     }
 
     protected virtual void OnEnable()
     {
         Active = true;
-        SetOpen(IsOpen, quiet: true);
+        SetOpen(IsOpen, _quiet: true);
     }
 
     // 꺼질 때 정리: 열린 상태·대기 타이머·구독을 남기지 않는다.
     protected virtual void OnDisable()
     {
         Active = false;
-        if (IsOpen) Close();
+        if (IsOpen)
+        {
+            Close();
+        }
     }
 
     // returns true when the requested state is now applied.
-    public bool SetOpen(bool open, bool quiet = false)
+    public bool SetOpen(bool _open, bool _quiet = false)
     {
-        if (open && !CanOpen) open = false;
-        bool changed = IsOpen != open;
-        Root.SetActive(open);
-        IsOpen = open;
-        if (!changed && !quiet) return true;
-        if (open) OnShow(); else OnHide();
-        if (!quiet && changed) GameEvents.RaisePanelVisibility(PanelName, open);
-        return IsOpen == open;
+        if (_open && !CanOpen)
+        {
+            _open = false;
+        }
+
+        bool changed = IsOpen != _open;
+        Root.SetActive(_open);
+        IsOpen = _open;
+        if (!changed && !_quiet)
+        {
+            return true;
+        }
+
+        if (_open)
+        {
+            OnShow();
+        }
+        else
+        {
+            OnHide();
+        }
+
+        if (!_quiet && changed)
+        {
+            GameEvents.RaisePanelVisibility(PanelName, _open);
+        }
+
+        return IsOpen == _open;
     }
 
     public bool Toggle() => SetOpen(!IsOpen);

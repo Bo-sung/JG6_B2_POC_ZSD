@@ -5,7 +5,8 @@ using System;
 // 파일명은 데이터 클래스명과 일치시켜야 한다(TableManager.Load가 그 이름으로 읽는다).
 
 // 플레이 공통 수치와 해금 효과 목록. 예시 필드이므로 프로젝트에서 필드를 더하거나 바꾼다.
-[Serializable] public sealed class GameplayTableData
+[Serializable]
+public sealed class GameplayTableData
 {
     public string status, note;
     public PlayerData player;
@@ -14,7 +15,8 @@ using System;
 }
 
 // 씬 진행 경로(타이틀 → 게임 → 재시작). TableManager.Load가 읽는 두 번째 테이블.
-[Serializable] public sealed class FlowTableData
+[Serializable]
+public sealed class FlowTableData
 {
     public string status, note;
     public SceneLinkData[] scenes = Array.Empty<SceneLinkData>();

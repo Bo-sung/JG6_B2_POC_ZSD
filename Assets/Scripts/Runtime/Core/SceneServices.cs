@@ -9,45 +9,65 @@ using UnityEngine.SceneManagement;
 //   SceneServices.For<ScenePool>(otherScene);      // Additive로 열린 씬의 풀
 public static class SceneServices
 {
-    const string RootName = "Scene Services";
+    const string ROOT_NAME = "Scene Services";
 
     // 씬에 이미 있는 서비스를 찾을 때만 사용(생성하지 않는다).
-    public static T Find<T>(Scene scene) where T : Component
+    public static T Find<T>(Scene _scene) where T : Component
     {
-        if (!scene.IsValid()) return null;
-        foreach (var root in scene.GetRootGameObjects())
+        if (!_scene.IsValid())
+        {
+            return null;
+        }
+
+        foreach (var root in _scene.GetRootGameObjects())
         {
             var component = root.GetComponentInChildren<T>(true);
-            if (component) return component;
+            if (component)
+            {
+                return component;
+            }
         }
         return null;
     }
 
-    public static T For<T>(Scene scene) where T : Component => Find<T>(scene) ?? Create<T>(scene);
+    public static T For<T>(Scene _scene) where T : Component => Find<T>(_scene) ?? Create<T>(_scene);
     public static T For<T>() where T : Component => For<T>(SceneManager.GetActiveScene());
 
     // 서비스를 씬 안의 호스트 오브젝트에 붙인다. DontDestroyOnLoad 금지(씬과 함께 사라져야 한다).
-    static T Create<T>(Scene scene) where T : Component
+    static T Create<T>(Scene _scene) where T : Component
     {
-        if (!scene.IsValid()) return null;
+        if (!_scene.IsValid())
+        {
+            return null;
+        }
+
         var host = new GameObject(typeof(T).Name);
-        SceneManager.MoveGameObjectToScene(host, scene);
-        host.transform.SetParent(Root(scene).transform, false);
+        SceneManager.MoveGameObjectToScene(host, _scene);
+        host.transform.SetParent(Root(_scene).transform, false);
         return host.AddComponent<T>();
     }
 
-    static GameObject Root(Scene scene)
+    static GameObject Root(Scene _scene)
     {
-        foreach (var root in scene.GetRootGameObjects())
-            if (root.name == RootName) return root;
-        var created = new GameObject(RootName);
-        SceneManager.MoveGameObjectToScene(created, scene);
+        foreach (var root in _scene.GetRootGameObjects())
+        {
+            if (root.name == ROOT_NAME)
+            {
+                return root;
+            }
+        }
+
+        var created = new GameObject(ROOT_NAME);
+        SceneManager.MoveGameObjectToScene(created, _scene);
         return created;
     }
 
     // 씬 오브젝트를 특정 씬 소속으로 옮긴다(풀이 만든 오브젝트의 소속 보장).
-    public static void MoveTo(GameObject target, Scene scene)
+    public static void MoveTo(GameObject _target, Scene _scene)
     {
-        if (target && scene.IsValid() && target.scene != scene) SceneManager.MoveGameObjectToScene(target, scene);
+        if (_target && _scene.IsValid() && _target.scene != _scene)
+        {
+            SceneManager.MoveGameObjectToScene(_target, _scene);
+        }
     }
 }

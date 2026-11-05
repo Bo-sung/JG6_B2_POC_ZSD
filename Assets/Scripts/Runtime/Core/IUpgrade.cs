@@ -10,6 +10,6 @@ public interface IUpgrade
 {
     string Id { get; }
 
-    void Apply(GameObject owner);
-    void Remove(GameObject owner);
+    void Apply(GameObject _owner);
+    void Remove(GameObject _owner);
 }
