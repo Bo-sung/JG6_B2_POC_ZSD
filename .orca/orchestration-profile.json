@@ -11,7 +11,8 @@
     "executor": "codex",
     "model": "gpt-6.1-sol",
     "fallback": [
-      { "executor": "pi", "model": "zai/glm-5.3-flash" }
+      { "executor": "pi", "model": "zai/glm-5.3-flash" },
+      { "executor": "antigravity", "model": "claude-sonnet-5-5-medium" }
     ]
   },
   "low": {
