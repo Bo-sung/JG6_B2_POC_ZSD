@@ -49,6 +49,10 @@ public sealed class GameSession : MonoBehaviour
     [SerializeField] BuildingBase wallPrefab;
     [SerializeField] BuildingBase towerPrefab;
 
+    // 설치 접촉면의 부동소수점 오차 보정. 밸런스 값이 아니다.
+    [SerializeField] float placementSkin = 0.01f;
+    // 지상 접근 자리의 충돌 조사 높이. 보행자 반경은 생존자 프리팹의 Agent에서 읽는다.
+    [SerializeField] float stationAccessHeight = 0.5f;
     GameplayTableData table;
     SessionFlow flow;
     ResourceEconomy economy;
@@ -414,7 +418,7 @@ public sealed class GameSession : MonoBehaviour
             _error = "결과 단계에서는 방어 위치를 바꿀 수 없습니다.";
             return false;
         }
-        if (_station == null)
+        if (_station == null || !(_station is BuildingBase building) || !building || building.Hp <= 0 || !buildings.Contains(building))
         {
             _error = "감시탑이 지정되지 않았습니다.";
             return false;
@@ -612,31 +616,16 @@ public sealed class GameSession : MonoBehaviour
     }
 
     // ── 건설 ──
-    // 건설 패널과 PocDebug가 호출한다. 격자에 맞춘 위치에 프리팹을 놓는다. 허용 구역 판정은 BuildController 몫이다.
+    // 건설 패널과 PocDebug가 호출한다. 격자에 맞춘 위치에 프리팹을 놓는다. 허용 구역과 충돌은 모든 호출에서 동일하게 판정한다.
     public bool TryPlaceBuilding(BuildingType _type, Vector3 _position, Quaternion _rotation, out BuildingBase _building, out string _error)
     {
         _building = null;
         BuildingBase prefab = _type == BuildingType.Wall ? wallPrefab : towerPrefab;
         BuildingStatData stat = _type == BuildingType.Wall ? table.buildings.wall : table.buildings.tower;
-        if (!CanBuild)
-        {
-            _error = "시설은 준비 단계에만 설치할 수 있습니다.";
-            return false;
-        }
-        if (!prefab)
-        {
-            _error = "설치할 수 없는 시설입니다.";
-            return false;
-        }
         Vector3 snapped = SnapToGrid(_position);
-        foreach (BuildingBase building in buildings)
+        if (!CanPlaceBuilding(_type, snapped, _rotation, out _error))
         {
-            // 격자 절반보다 가까우면 같은 칸이다. 밸런스 값이 아니라 격자 정의에서 나온 비율이다.
-            if (building && Vector3.Distance(building.transform.position, snapped) < table.buildings.gridSize * 0.5f)
-            {
-                _error = "이미 시설이 있는 위치입니다.";
-                return false;
-            }
+            return false;
         }
         if (!economy.TrySpend(stat.cost))
         {
@@ -651,10 +640,139 @@ public sealed class GameSession : MonoBehaviour
         return true;
     }
 
+    public int BuildingCost(BuildingType _type) => _type == BuildingType.Wall ? table.buildings.wall.cost : table.buildings.tower.cost;
+
+    public bool CanPlaceBuilding(BuildingType _type, Vector3 _position, Quaternion _rotation, out string _error)
+    {
+        if (!CanBuild)
+        {
+            _error = "시설은 준비 단계에만 설치할 수 있습니다.";
+            return false;
+        }
+        BuildingBase prefab = _type == BuildingType.Wall ? wallPrefab : towerPrefab;
+        if (!prefab || !prefab.Footprint)
+        {
+            _error = "설치할 수 없는 시설입니다.";
+            return false;
+        }
+        Vector3 point = SnapToGrid(_position);
+        prefab.PlacementBox(point, _rotation, out Vector3 center, out Vector3 half, out Quaternion orientation);
+        BuildZone[] zones = FindObjectsByType<BuildZone>(FindObjectsSortMode.None);
+        // 모든 풋프린트 모서리가 허용 영역 안이어야 한다. 지형 충돌은 별도로 검사한다.
+        for (int x = -1; x <= 1; x += 2)
+        {
+            for (int z = -1; z <= 1; z += 2)
+            {
+                Vector3 corner = center + orientation * new Vector3(half.x * x, 0, half.z * z);
+                bool inside = false;
+                foreach (BuildZone zone in zones)
+                {
+                    inside |= zone.Contains(corner);
+                }
+                if (!inside)
+                {
+                    _error = "설치 허용 구역 밖입니다.";
+                    return false;
+                }
+            }
+        }
+        // 표시 메시가 탑 위로 이동해도 생존자의 지상 점유는 유지한다.
+        foreach (SurvivorUnit unit in units)
+        {
+            if (!unit.State.CanAct)
+            {
+                continue;
+            }
+            Vector3 local = Quaternion.Inverse(orientation) * (unit.transform.position - center);
+            float dx = Mathf.Max(0, Mathf.Abs(local.x) - half.x);
+            float dz = Mathf.Max(0, Mathf.Abs(local.z) - half.z);
+            float radius = unit.GetComponent<UnityEngine.AI.NavMeshAgent>().radius;
+            if (dx * dx + dz * dz < radius * radius)
+            {
+                _error = "생존자가 있는 위치입니다.";
+                return false;
+            }
+        }
+        // 입력 Update와 물리 틱 사이에 이동한 시설도 동일하게 검사한다.
+        Physics.SyncTransforms();
+        // 접한 면은 허용하고 겹친 부피만 거부한다. 보정값은 씬에 직렬화한다.
+        Collider[] hits = Physics.OverlapBox(center, Vector3.Max(Vector3.zero, half - Vector3.one * placementSkin), orientation,
+            GameLayers.OBSTACLE_MASK | GameLayers.PLAYER_MASK, QueryTriggerInteraction.Ignore);
+        foreach (Collider hit in hits)
+        {
+            SurvivorUnit survivor = hit.GetComponentInParent<SurvivorUnit>();
+            _error = survivor ? "생존자가 있는 위치입니다." : "시설 또는 지형과 겹칩니다.";
+            return false;
+        }
+        if (prefab is TowerBuilding tower)
+        {
+            Vector3 access = point + _rotation * prefab.transform.InverseTransformPoint(tower.StationPosition);
+            float radius = units[0].GetComponent<UnityEngine.AI.NavMeshAgent>().radius;
+            if (Physics.CheckSphere(access + Vector3.up * stationAccessHeight, radius, GameLayers.OBSTACLE_MASK, QueryTriggerInteraction.Ignore))
+            {
+                _error = "감시탑의 지상 접근 자리가 막혀 있습니다.";
+                return false;
+            }
+        }
+        if (Scrap < BuildingCost(_type))
+        {
+            _error = "스크랩이 부족합니다.";
+            return false;
+        }
+        _error = null;
+        return true;
+    }
+
+    public bool TryRepairBuilding(BuildingBase _building, out string _error)
+    {
+        if (!CanBuild)
+        {
+            _error = "수리는 준비 단계에만 가능합니다.";
+            return false;
+        }
+        if (!_building || _building.Hp <= 0 || !buildings.Contains(_building))
+        {
+            _error = "수리할 시설이 없습니다. 파괴된 시설은 재설치하세요.";
+            return false;
+        }
+        if (!_building.IsDamaged)
+        {
+            _error = "손상되지 않은 시설입니다.";
+            return false;
+        }
+        if (!economy.TrySpend(_building.RepairCost))
+        {
+            _error = "수리 스크랩이 부족합니다.";
+            return false;
+        }
+        _building.Repair();
+        _error = null;
+        return true;
+    }
+
+    public void VacateTower(TowerBuilding _tower)
+    {
+        var affected = new List<string>();
+        foreach (SurvivorUnit unit in units)
+        {
+            if (board.DefenseOf(unit.State.Id).towerId == _tower.StationId)
+            {
+                affected.Add(unit.State.Id);
+            }
+            unit.LeaveTower(_tower);
+        }
+        board.VacateTower(_tower.StationId);
+        foreach (string id in affected)
+        {
+            RaiseAssignment(id);
+            FindUnit(id).ShowDefenseMarker(DefensePosition(id));
+        }
+    }
+
     public Vector3 SnapToGrid(Vector3 _position)
     {
         float grid = table.buildings.gridSize;
-        return new Vector3(Mathf.Round(_position.x / grid) * grid, _position.y, Mathf.Round(_position.z / grid) * grid);
+        return new Vector3(Mathf.Round(_position.x / grid) * grid, 0, Mathf.Round(_position.z / grid) * grid);
     }
 
     void OnSurvivorDied(GameEvents.SurvivorDeathInfo _info)

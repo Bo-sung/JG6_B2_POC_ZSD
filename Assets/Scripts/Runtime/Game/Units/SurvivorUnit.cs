@@ -25,6 +25,9 @@ public sealed class SurvivorUnit : MonoBehaviour
     NavMeshAgent agent;
     SurvivorCombatData combat;
     ICombatStation station;
+    Transform visualBody;
+    Vector3 bodyRest;
+    Vector3 labelRest;
     EnemyUnit autoTarget;
     EnemyUnit manualTarget;
     bool arrived;
@@ -48,17 +51,54 @@ public sealed class SurvivorUnit : MonoBehaviour
         get
         {
             bool alive = station is Object stationObject && stationObject;
-            return alive && State.Activity == SurvivorActivity.Guarding && arrived ? station : null;
+            return alive && State.CanAct && State.Activity == SurvivorActivity.Guarding && arrived
+                && Vector3.Distance(transform.position, station.StationPosition) <= arrivalTolerance ? station : null;
         }
     }
 
+    public TowerBuilding OccupiedTower => ActiveStation as TowerBuilding;
+    public float DamagePerSecond => (combat.baseDamage + combat.damagePerCombat * State.Combat)
+        * (ActiveStation != null ? ActiveStation.DamageMultiplier : 1) / combat.attackInterval;
+
+    public void LeaveTower(TowerBuilding _tower)
+    {
+        if (station == _tower)
+        {
+            station = null;
+            RefreshTowerVisual();
+        }
+    }
+
+    void LateUpdate()
+    {
+        if (State != null)
+        {
+            RefreshTowerVisual();
+        }
+    }
+
+    void RefreshTowerVisual()
+    {
+        if (!visualBody)
+        {
+            return;
+        }
+        Vector3 offset = OccupiedTower ? OccupiedTower.SeatPosition - transform.position : Vector3.zero;
+        visualBody.position = transform.position + bodyRest + offset;
+        nameLabel.transform.position = transform.position + labelRest + offset;
+    }
+
     public bool IsProtected => ActiveStation != null && ActiveStation.ProtectsOccupant;
+    Vector3 FiringOrigin => OccupiedTower ? OccupiedTower.SeatPosition : transform.position;
     public float AttackRange => combat.attackRange + (ActiveStation != null ? ActiveStation.RangeBonus : 0);
 
     // GameSession.Awake에서 호출되므로 이 컴포넌트의 Awake 순서에 기대지 않는다.
     public void Bind(SurvivorState _state, SurvivorCombatData _combat)
     {
         agent = GetComponent<NavMeshAgent>();
+        visualBody = transform.Find("Body");
+        bodyRest = visualBody.localPosition;
+        labelRest = nameLabel.transform.localPosition;
         State = _state;
         combat = _combat;
         agent.speed = _combat.moveSpeed;
@@ -331,7 +371,7 @@ public sealed class SurvivorUnit : MonoBehaviour
     // 사선 높이는 설치 방벽보다 높고 지형 벽과 시설보다 낮다. 방벽 너머로는 쏘고 지형 벽은 뚫지 못한다.
     bool HasLineOfFire(EnemyUnit _enemy)
     {
-        Vector3 from = transform.position + Vector3.up * sightHeight;
+        Vector3 from = FiringOrigin + Vector3.up * sightHeight;
         Vector3 to = _enemy.transform.position + Vector3.up * sightHeight;
         return !Physics.Linecast(from, to, GameLayers.OBSTACLE_MASK, QueryTriggerInteraction.Ignore);
     }
@@ -348,7 +388,7 @@ public sealed class SurvivorUnit : MonoBehaviour
         {
             damage *= ActiveStation.DamageMultiplier;
         }
-        tracer.SetPosition(0, transform.position + Vector3.up * sightHeight);
+        tracer.SetPosition(0, FiringOrigin + Vector3.up * sightHeight);
         tracer.SetPosition(1, _enemy.transform.position + Vector3.up * sightHeight);
         tracer.enabled = true;
         tracerEndTime = Time.time + tracerSeconds;

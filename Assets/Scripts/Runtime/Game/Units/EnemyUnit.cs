@@ -98,6 +98,17 @@ public sealed class EnemyUnit : MonoBehaviour
     // 경로를 다시 계산한다. 방벽이 부서지거나 새로 막혀도 이 주기 안에 반영된다.
     void Think()
     {
+        TowerBuilding tower = FindOccupiedTower(out Vector3 towerApproach);
+        if (tower)
+        {
+            survivorTarget = null;
+            buildingTarget = tower;
+            targetingCore = false;
+            CurrentMode = Mode.Breach;
+            agent.isStopped = false;
+            agent.SetDestination(towerApproach);
+            return;
+        }
         SurvivorUnit survivor = FindReachableSurvivor();
         if (survivor)
         {
@@ -149,7 +160,8 @@ public sealed class EnemyUnit : MonoBehaviour
                 return;
             }
         }
-        else if (buildingTarget && HorizontalDistance(buildingTarget.ClosestPoint(transform.position)) <= data.attackRange)
+        else if (buildingTarget && HorizontalDistance(buildingTarget.ClosestPoint(transform.position)) <= data.attackRange
+            && (!(buildingTarget is TowerBuilding) || HasMeleeAccess(buildingTarget)))
         {
             BuildingBase building = buildingTarget;
             Strike(() => building.ApplyDamage(data.damage * data.buildingDamageMultiplier));
@@ -216,6 +228,38 @@ public sealed class EnemyUnit : MonoBehaviour
             {
                 nearest = survivor;
                 nearestDistance = distance;
+            }
+        }
+        return nearest;
+    }
+
+    bool HasMeleeAccess(BuildingBase _building)
+    {
+        Vector3 from = transform.position + Vector3.up * meleeHeight;
+        Vector3 to = _building.ClosestPoint(from);
+        return !Physics.Linecast(from, to, out RaycastHit hit, GameLayers.OBSTACLE_MASK, QueryTriggerInteraction.Ignore)
+            || hit.collider.GetComponentInParent<BuildingBase>() == _building;
+    }
+
+    TowerBuilding FindOccupiedTower(out Vector3 _approach)
+    {
+        TowerBuilding nearest = null;
+        float best = data.aggroRange;
+        _approach = transform.position;
+        foreach (BuildingBase building in session.Buildings)
+        {
+            if (!(building is TowerBuilding tower) || !tower || !tower.IsOccupied)
+            {
+                continue;
+            }
+            float distance = HorizontalDistance(tower.ClosestPoint(transform.position));
+            // 같은 지형 벽의 반대편 NavMesh를 잘못 골라 제자리에서 멈추지 않게 실제 탑승 접근 자리를 쓴다.
+            Vector3 approach = tower.StationPosition;
+            if (distance <= best && agent.CalculatePath(approach, path) && path.status == NavMeshPathStatus.PathComplete)
+            {
+                best = distance;
+                nearest = tower;
+                _approach = approach;
             }
         }
         return nearest;

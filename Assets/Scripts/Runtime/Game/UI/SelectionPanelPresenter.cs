@@ -30,7 +30,7 @@ public sealed class SelectionPanelPresenter
         {
             return;
         }
-        string shown = input.IsPickingDefense ? "맵을 클릭해 방어 위치를 지정하세요. 우클릭으로 취소합니다." : message;
+        string shown = input.IsPickingDefense ? "지점 또는 감시탑을 클릭하세요. 탑 정원 1명. 우클릭 취소." : message;
         if (ids.Count == 1)
         {
             ShowSingle(session.FindUnit(ids[0]), shown);
@@ -91,7 +91,11 @@ public sealed class SelectionPanelPresenter
         var ids = new List<string>(input.Selection.Ids);
         for (int index = 0; index < ids.Count; index++)
         {
-            if (!session.TrySetDefensePoint(ids[index], input.SpreadPoint(_point, index, ids.Count), out string error))
+            string error;
+            bool assigned = input.PickedDefenseTower
+                ? session.TrySetDefenseStation(ids[index], input.PickedDefenseTower, out error)
+                : session.TrySetDefensePoint(ids[index], input.SpreadPoint(_point, index, ids.Count), out error);
+            if (!assigned)
             {
                 message = error;
             }

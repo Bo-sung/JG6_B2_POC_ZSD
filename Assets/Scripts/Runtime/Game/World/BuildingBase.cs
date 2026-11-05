@@ -14,6 +14,17 @@ public abstract class BuildingBase : MonoBehaviour
     Color intactColor;
     int cost;
 
+    public BoxCollider Footprint => body as BoxCollider;
+
+    public void PlacementBox(Vector3 _position, Quaternion _rotation, out Vector3 _center, out Vector3 _half, out Quaternion _orientation)
+    {
+        BoxCollider box = Footprint;
+        Vector3 localCenter = transform.InverseTransformPoint(box.transform.TransformPoint(box.center));
+        _center = _position + _rotation * localCenter;
+        _half = Vector3.Scale(box.size, box.transform.lossyScale) * 0.5f;
+        _orientation = _rotation * Quaternion.Inverse(transform.rotation) * box.transform.rotation;
+    }
+
     public abstract BuildingType Type { get; }
     public float Hp { get; private set; }
     public float MaxHp { get; private set; }

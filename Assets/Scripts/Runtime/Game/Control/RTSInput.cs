@@ -30,6 +30,21 @@ public sealed class RTSInput : MonoBehaviour
     bool wasLeftHeld;
     bool wasRightHeld;
 
+    bool worldInputBlocked;
+    int unblockedFrame = -1;
+    public bool WorldInputBlocked
+    {
+        get => worldInputBlocked;
+        set
+        {
+            if (worldInputBlocked && !value)
+            {
+                unblockedFrame = Time.frameCount;
+            }
+            worldInputBlocked = value;
+        }
+    }
+    public TowerBuilding PickedDefenseTower { get; private set; }
     public SelectionModel Selection { get; private set; }
     public bool IsPickingDefense => pendingDefensePick != null;
 
@@ -70,6 +85,13 @@ public sealed class RTSInput : MonoBehaviour
         bool rightPressed = mouse.rightButton.wasPressedThisFrame || (rightHeld && !wasRightHeld);
         wasLeftHeld = leftHeld;
         wasRightHeld = rightHeld;
+        if (WorldInputBlocked || unblockedFrame == Time.frameCount)
+        {
+            leftPressedInWorld = false;
+            isDragging = false;
+            selectionBox.gameObject.SetActive(false);
+            return;
+        }
         if (leftPressed)
         {
             leftPressedInWorld = !IsOverUi(position);
@@ -93,6 +115,10 @@ public sealed class RTSInput : MonoBehaviour
     // ── 공개 API(패널이 호출) ──
     public void SelectFromList(string _id)
     {
+        if (WorldInputBlocked || unblockedFrame == Time.frameCount)
+        {
+            return;
+        }
         if (IsShiftHeld())
         {
             Selection.Add(_id);
@@ -104,6 +130,8 @@ public sealed class RTSInput : MonoBehaviour
     // 다음 바닥 클릭 위치를 넘겨준다. 우클릭이나 단계 변경으로 취소된다.
     public void BeginDefensePick(Action<Vector3> _onPicked)
     {
+        FindFirstObjectByType<BuildController>()?.Cancel();
+        PickedDefenseTower = null;
         pendingDefensePick = _onPicked;
     }
 
@@ -184,7 +212,9 @@ public sealed class RTSInput : MonoBehaviour
         leftPressedInWorld = false;
         if (IsPickingDefense)
         {
-            if (TryGetGroundPoint(_position, out Vector3 point))
+            PickedDefenseTower = PickComponent<TowerBuilding>(_position, GameLayers.OBSTACLE_MASK);
+            Vector3 point = PickedDefenseTower ? PickedDefenseTower.StationPosition : Vector3.zero;
+            if (PickedDefenseTower || TryGetGroundPoint(_position, out point))
             {
                 Action<Vector3> onPicked = pendingDefensePick;
                 pendingDefensePick = null;

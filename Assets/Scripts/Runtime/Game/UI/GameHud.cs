@@ -12,6 +12,10 @@ public sealed class GameHud : MonoBehaviour
     [SerializeField] AlertBannerView alertView;
     [SerializeField] ResultPanelView resultView;
 
+    [SerializeField] BuildPanelView buildView;
+    [SerializeField] BuildController buildController;
+    BuildPanelPresenter build;
+
     HudPresenter hud;
     SurvivorListPresenter list;
     SelectionPanelPresenter selection;
@@ -21,6 +25,7 @@ public sealed class GameHud : MonoBehaviour
     // GameSession.Awake 이후에 세션 상태를 읽는다.
     void Start()
     {
+        build = new BuildPanelPresenter(buildView, session, buildController);
         hud = new HudPresenter(hudView, session);
         list = new SurvivorListPresenter(listView, session, input);
         selection = new SelectionPanelPresenter(selectionView, session, input);
@@ -39,6 +44,7 @@ public sealed class GameHud : MonoBehaviour
 
     void Update()
     {
+        build.Refresh();
         hud.Refresh();
         list.Refresh();
         selection.Refresh();
