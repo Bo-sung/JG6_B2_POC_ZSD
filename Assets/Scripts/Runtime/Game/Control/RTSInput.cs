@@ -1,0 +1,322 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AI;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+
+// 선택과 명령 입력. 좌클릭 단일, 드래그 다중, Shift 추가, 우클릭 바닥=이동/적=공격.
+// UI 위에서 누른 클릭은 월드 명령으로 넘기지 않는다.
+[DisallowMultipleComponent]
+public sealed class RTSInput : MonoBehaviour
+{
+    [SerializeField] GameSession session;
+    [SerializeField] Camera worldCamera;
+    [SerializeField] RectTransform selectionBox;
+    // 조작 보정값이다. 씬에서 조정한다.
+    [SerializeField] float dragThreshold = 8f;
+    [SerializeField] float pickRadius = 0.4f;
+    [SerializeField] float rayDistance = 300f;
+    [SerializeField] float navSampleRadius = 8f;
+    [SerializeField] float moveSpread = 1.5f;
+
+    readonly List<RaycastResult> uiHits = new List<RaycastResult>();
+    readonly List<string> selectionBuffer = new List<string>();
+    PointerEventData pointerData;
+    Action<Vector3> pendingDefensePick;
+    bool leftPressedInWorld;
+    Vector2 pressPosition;
+    bool isDragging;
+    bool wasLeftHeld;
+    bool wasRightHeld;
+
+    public SelectionModel Selection { get; private set; }
+    public bool IsPickingDefense => pendingDefensePick != null;
+
+    void Awake()
+    {
+        Selection = new SelectionModel(CanSelect);
+        Selection.Changed += ApplySelectionVisuals;
+    }
+
+    void OnEnable()
+    {
+        GameEvents.SurvivorDied += OnSurvivorDied;
+    }
+
+    void OnDisable()
+    {
+        GameEvents.SurvivorDied -= OnSurvivorDied;
+    }
+
+    void Update()
+    {
+        Mouse mouse = Mouse.current;
+        if (mouse == null)
+        {
+            return;
+        }
+        Selection.Prune();
+        if (IsPickingDefense && !session.CanChangeDefense)
+        {
+            CancelDefensePick();
+        }
+        Vector2 position = mouse.position.ReadValue();
+        // 프레임 밖 InputSystem.Update로 들어온 입력은 wasPressedThisFrame에 잡히지 않아 누름 상태 변화도 함께 본다.
+        bool leftHeld = mouse.leftButton.isPressed;
+        bool rightHeld = mouse.rightButton.isPressed;
+        bool leftPressed = mouse.leftButton.wasPressedThisFrame || (leftHeld && !wasLeftHeld);
+        bool leftReleased = mouse.leftButton.wasReleasedThisFrame || (!leftHeld && wasLeftHeld);
+        bool rightPressed = mouse.rightButton.wasPressedThisFrame || (rightHeld && !wasRightHeld);
+        wasLeftHeld = leftHeld;
+        wasRightHeld = rightHeld;
+        if (leftPressed)
+        {
+            leftPressedInWorld = !IsOverUi(position);
+            pressPosition = position;
+            isDragging = false;
+        }
+        if (leftPressedInWorld && leftHeld && !IsPickingDefense)
+        {
+            UpdateDrag(position);
+        }
+        if (leftReleased)
+        {
+            OnLeftReleased(position);
+        }
+        if (rightPressed && !IsOverUi(position))
+        {
+            OnRightPressed(position);
+        }
+    }
+
+    // ── 공개 API(패널이 호출) ──
+    public void SelectFromList(string _id)
+    {
+        if (IsShiftHeld())
+        {
+            Selection.Add(_id);
+            return;
+        }
+        Selection.Replace(new[] { _id });
+    }
+
+    // 다음 바닥 클릭 위치를 넘겨준다. 우클릭이나 단계 변경으로 취소된다.
+    public void BeginDefensePick(Action<Vector3> _onPicked)
+    {
+        pendingDefensePick = _onPicked;
+    }
+
+    public void CancelDefensePick()
+    {
+        pendingDefensePick = null;
+    }
+
+    // ── 입력 처리 ──
+    bool CanSelect(string _id)
+    {
+        SurvivorUnit unit = session.FindUnit(_id);
+        return unit != null && unit.State.CanAct;
+    }
+
+    void ApplySelectionVisuals()
+    {
+        foreach (SurvivorUnit unit in session.Units)
+        {
+            if (unit.State.CanAct)
+            {
+                unit.SetSelected(Selection.Contains(unit.State.Id));
+            }
+        }
+    }
+
+    void OnSurvivorDied(GameEvents.SurvivorDeathInfo _info)
+    {
+        Selection.Prune();
+    }
+
+    static bool IsShiftHeld()
+    {
+        Keyboard keyboard = Keyboard.current;
+        return keyboard != null && keyboard.shiftKey.isPressed;
+    }
+
+    // 모듈의 프레임 상태에 기대지 않고 이번 위치의 UI를 직접 조사한다.
+    bool IsOverUi(Vector2 _position)
+    {
+        EventSystem system = EventSystem.current;
+        if (!system)
+        {
+            return false;
+        }
+        pointerData ??= new PointerEventData(system);
+        pointerData.position = _position;
+        uiHits.Clear();
+        system.RaycastAll(pointerData, uiHits);
+        return uiHits.Count > 0;
+    }
+
+    void UpdateDrag(Vector2 _position)
+    {
+        if (!isDragging && (_position - pressPosition).magnitude >= dragThreshold)
+        {
+            isDragging = true;
+            selectionBox.gameObject.SetActive(true);
+        }
+        if (isDragging)
+        {
+            Vector2 min = Vector2.Min(pressPosition, _position);
+            Vector2 max = Vector2.Max(pressPosition, _position);
+            var canvas = selectionBox.parent as RectTransform;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvas, min, null, out Vector2 localMin);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvas, max, null, out Vector2 localMax);
+            selectionBox.localPosition = localMin;
+            selectionBox.sizeDelta = localMax - localMin;
+        }
+    }
+
+    void OnLeftReleased(Vector2 _position)
+    {
+        if (!leftPressedInWorld)
+        {
+            return;
+        }
+        leftPressedInWorld = false;
+        if (IsPickingDefense)
+        {
+            if (TryGetGroundPoint(_position, out Vector3 point))
+            {
+                Action<Vector3> onPicked = pendingDefensePick;
+                pendingDefensePick = null;
+                onPicked(point);
+            }
+            return;
+        }
+        if (isDragging)
+        {
+            isDragging = false;
+            selectionBox.gameObject.SetActive(false);
+            SelectInScreenRect(Vector2.Min(pressPosition, _position), Vector2.Max(pressPosition, _position));
+            return;
+        }
+        SelectAtPoint(_position);
+    }
+
+    void SelectAtPoint(Vector2 _position)
+    {
+        SurvivorUnit unit = PickComponent<SurvivorUnit>(_position, GameLayers.PLAYER_MASK);
+        bool additive = IsShiftHeld();
+        if (unit && unit.State.CanAct)
+        {
+            if (additive)
+            {
+                Selection.Add(unit.State.Id);
+            }
+            else
+            {
+                Selection.Replace(new[] { unit.State.Id });
+            }
+            return;
+        }
+        if (!additive)
+        {
+            Selection.Clear();
+        }
+    }
+
+    void SelectInScreenRect(Vector2 _min, Vector2 _max)
+    {
+        selectionBuffer.Clear();
+        if (IsShiftHeld())
+        {
+            selectionBuffer.AddRange(Selection.Ids);
+        }
+        foreach (SurvivorUnit unit in session.Units)
+        {
+            if (!unit.State.CanAct)
+            {
+                continue;
+            }
+            Vector3 screen = worldCamera.WorldToScreenPoint(unit.transform.position);
+            if (screen.z > 0 && screen.x >= _min.x && screen.x <= _max.x && screen.y >= _min.y && screen.y <= _max.y)
+            {
+                selectionBuffer.Add(unit.State.Id);
+            }
+        }
+        Selection.Replace(selectionBuffer);
+    }
+
+    void OnRightPressed(Vector2 _position)
+    {
+        if (IsPickingDefense)
+        {
+            CancelDefensePick();
+            return;
+        }
+        if (Selection.Count == 0)
+        {
+            return;
+        }
+        EnemyUnit enemy = PickComponent<EnemyUnit>(_position, GameLayers.ENEMY_MASK);
+        if (enemy)
+        {
+            foreach (string id in Selection.Ids)
+            {
+                session.CommandAttack(id, enemy);
+            }
+            return;
+        }
+        if (TryGetGroundPoint(_position, out Vector3 point))
+        {
+            IssueMove(point);
+        }
+    }
+
+    // 여러 명은 지점 주위 원으로 펼쳐 같은 점을 두고 다투지 않게 한다.
+    void IssueMove(Vector3 _point)
+    {
+        IReadOnlyList<string> ids = Selection.Ids;
+        for (int index = 0; index < ids.Count; index++)
+        {
+            session.CommandMove(ids[index], SpreadPoint(_point, index, ids.Count));
+        }
+    }
+
+    public Vector3 SpreadPoint(Vector3 _point, int _index, int _count)
+    {
+        if (_count <= 1)
+        {
+            return _point;
+        }
+        float angle = Mathf.PI * 2 * _index / _count;
+        Vector3 offset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * moveSpread;
+        return NavMesh.SamplePosition(_point + offset, out NavMeshHit hit, navSampleRadius, NavMesh.AllAreas) ? hit.position : _point;
+    }
+
+    T PickComponent<T>(Vector2 _position, int _mask) where T : Component
+    {
+        Ray ray = worldCamera.ScreenPointToRay(_position);
+        if (Physics.SphereCast(ray, pickRadius, out RaycastHit hit, rayDistance, _mask, QueryTriggerInteraction.Ignore))
+        {
+            return hit.collider.GetComponentInParent<T>();
+        }
+        return null;
+    }
+
+    // 벽을 눌러도 가까운 걸을 수 있는 지점으로 옮긴다.
+    bool TryGetGroundPoint(Vector2 _position, out Vector3 _point)
+    {
+        _point = default;
+        Ray ray = worldCamera.ScreenPointToRay(_position);
+        if (!Physics.Raycast(ray, out RaycastHit hit, rayDistance, GameLayers.WORLD_MASK, QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+        if (!NavMesh.SamplePosition(hit.point, out NavMeshHit navHit, navSampleRadius, NavMesh.AllAreas))
+        {
+            return false;
+        }
+        _point = navHit.position;
+        return true;
+    }
+}
