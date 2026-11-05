@@ -1,13 +1,109 @@
 {
-  "status": "template",
-  "note": "예시 테이블. 프로젝트에 맞게 필드와 값을 바꾼 뒤 Docs/TABLES.md 규칙을 따른다.",
-  "player": {
-    "maxHealth": 100,
-    "moveSpeed": 6,
-    "dashCharges": 2,
-    "dashCooldown": 1.2,
-    "interactRange": 2.5
+  "status": "poc-initial",
+  "note": "POC 초기 밸런스. POC_CORE.md 4절의 제안값에서 시작하며 테스트로 조정한다.",
+  "session": {
+    "prepSeconds": 100,
+    "alertSeconds": 10,
+    "combatSeconds": 100,
+    "timeoutCoreDamagePerEnemy": 15,
+    "startScrap": 8,
+    "defaultSeed": 12345
   },
+  "core": {
+    "maxHp": 300
+  },
+  "production": {
+    "maxWorkers": 2,
+    "scrapPerSecondPerWork": 0.0133
+  },
+  "survivorCombat": {
+    "moveSpeed": 3,
+    "attackRange": 12,
+    "attackInterval": 1,
+    "baseDamage": 4,
+    "damagePerCombat": 4,
+    "towerRangeBonus": 6,
+    "towerDamageMultiplier": 1.5
+  },
+  "survivors": [
+    { "id": "s1", "displayName": "서준", "combat": 5, "work": 1, "exploration": 2, "maxHp": 120 },
+    { "id": "s2", "displayName": "하윤", "combat": 4, "work": 2, "exploration": 2, "maxHp": 110 },
+    { "id": "s3", "displayName": "도현", "combat": 1, "work": 5, "exploration": 2, "maxHp": 90 },
+    { "id": "s4", "displayName": "지우", "combat": 2, "work": 4, "exploration": 1, "maxHp": 90 },
+    { "id": "s5", "displayName": "유나", "combat": 2, "work": 1, "exploration": 5, "maxHp": 90 },
+    { "id": "s6", "displayName": "민재", "combat": 3, "work": 3, "exploration": 3, "maxHp": 100 },
+    { "id": "s7", "displayName": "수아", "combat": 3, "work": 2, "exploration": 3, "maxHp": 100 }
+  ],
+  "buildings": {
+    "gridSize": 2,
+    "wall": { "cost": 4, "maxHp": 120 },
+    "tower": { "cost": 8, "maxHp": 200 }
+  },
+  "enemies": [
+    { "id": "basic", "displayName": "기본형", "maxHp": 60, "moveSpeed": 2.5, "attackRange": 1.8, "attackInterval": 1, "damage": 6, "buildingDamageMultiplier": 1, "aggroRange": 7 },
+    { "id": "breaker", "displayName": "돌파형", "maxHp": 100, "moveSpeed": 2, "attackRange": 1.8, "attackInterval": 1, "damage": 6, "buildingDamageMultiplier": 5, "aggroRange": 4 }
+  ],
+  "waves": [
+    {
+      "spawnInterval": 0.8,
+      "spawns": [
+        { "enemyId": "basic", "lane": "west", "count": 3 },
+        { "enemyId": "basic", "lane": "east", "count": 2 }
+      ]
+    },
+    {
+      "spawnInterval": 0.8,
+      "spawns": [
+        { "enemyId": "basic", "lane": "west", "count": 3 },
+        { "enemyId": "basic", "lane": "east", "count": 3 },
+        { "enemyId": "breaker", "lane": "west", "count": 1 },
+        { "enemyId": "breaker", "lane": "east", "count": 1 }
+      ]
+    },
+    {
+      "spawnInterval": 0.7,
+      "spawns": [
+        { "enemyId": "basic", "lane": "west", "count": 4 },
+        { "enemyId": "basic", "lane": "east", "count": 4 },
+        { "enemyId": "breaker", "lane": "west", "count": 2 },
+        { "enemyId": "breaker", "lane": "east", "count": 1 }
+      ]
+    }
+  ],
+  "expeditions": [
+    {
+      "id": "near",
+      "displayName": "근거리",
+      "durationSeconds": 70,
+      "minParty": 1,
+      "maxParty": 3,
+      "riskLabel": "낮음",
+      "rewardLabel": "적음",
+      "rewardChanceBase": 0.65,
+      "rewardChancePerExploration": 0.03,
+      "rewardBase": 2,
+      "rewardPerExploration": 0.5,
+      "deathChanceBase": 0.12,
+      "deathChancePerExploration": -0.01,
+      "deathChancePerExtraMember": -0.02
+    },
+    {
+      "id": "far",
+      "displayName": "원거리",
+      "durationSeconds": 150,
+      "minParty": 1,
+      "maxParty": 3,
+      "riskLabel": "높음",
+      "rewardLabel": "많음",
+      "rewardChanceBase": 0.5,
+      "rewardChancePerExploration": 0.03,
+      "rewardBase": 6,
+      "rewardPerExploration": 1,
+      "deathChanceBase": 0.4,
+      "deathChancePerExploration": -0.015,
+      "deathChancePerExtraMember": -0.04
+    }
+  ],
   "sequence": {
     "firstUpgrade": "sample.doubleDash"
   },

@@ -7,6 +7,13 @@ using UnityEngine;
 // 규칙을 추가할 때: Check로 항목별 오류를 모은다(첫 오류에서 멈추지 않는다) → IsValid로보고 → 사용처는 RequireValid로 차단.
 public sealed class GameTableRules
 {
+    // POC 시스템 크기. 수치 조정이 아닌 범위 변경이므로 테이블에 두지 않는다(POC_CORE.md 0절 6항).
+    const int SURVIVOR_COUNT = 7;
+    const int WAVE_COUNT = 3;
+    const int EXPEDITION_REGION_COUNT = 2;
+    const int STAT_MIN = 1;
+    const int STAT_MAX = 5;
+
     public bool IsValid { get; private set; } = true;
 
     void Check(bool _condition, string _path, string _rule)
@@ -129,23 +136,140 @@ public sealed class GameTableRules
         Inspect(_tables.Gameplay, nameof(GameplayTableData));
         Inspect(_tables.Flow, nameof(FlowTableData));
 
-        ValidatePlayer(_tables.Gameplay.player);
+        ValidateSession(_tables.Gameplay);
+        ValidateSurvivors(_tables.Gameplay);
+        ValidateBuildings(_tables.Gameplay.buildings);
+        ValidateWaves(_tables.Gameplay);
+        ValidateExpeditions(_tables.Gameplay);
         ValidateUpgrades(_tables);
         ValidateScenes(_tables);
     }
 
-    void ValidatePlayer(PlayerData _player)
+    void ValidateSession(GameplayTableData _gameplay)
     {
-        if (_player == null)
+        if (_gameplay.session == null || _gameplay.core == null || _gameplay.production == null)
         {
-            Check(false, "Gameplay.player", "플레이어 설정이 필요합니다.");
+            Check(false, "Gameplay", "session, core, production 설정이 필요합니다.");
             return;
         }
-        Positive(_player.maxHealth, "Gameplay.player.maxHealth");
-        Positive(_player.moveSpeed, "Gameplay.player.moveSpeed");
-        IntRange(_player.dashCharges, 0, 10, "Gameplay.player.dashCharges");
-        Nonnegative(_player.dashCooldown, "Gameplay.player.dashCooldown");
-        Positive(_player.interactRange, "Gameplay.player.interactRange");
+        Positive(_gameplay.session.prepSeconds, "Gameplay.session.prepSeconds");
+        Positive(_gameplay.session.alertSeconds, "Gameplay.session.alertSeconds");
+        Positive(_gameplay.session.combatSeconds, "Gameplay.session.combatSeconds");
+        Nonnegative(_gameplay.session.timeoutCoreDamagePerEnemy, "Gameplay.session.timeoutCoreDamagePerEnemy");
+        Nonnegative(_gameplay.session.startScrap, "Gameplay.session.startScrap");
+        Positive(_gameplay.core.maxHp, "Gameplay.core.maxHp");
+        Positive(_gameplay.production.maxWorkers, "Gameplay.production.maxWorkers");
+        Positive(_gameplay.production.scrapPerSecondPerWork, "Gameplay.production.scrapPerSecondPerWork");
+    }
+
+    void ValidateSurvivors(GameplayTableData _gameplay)
+    {
+        var combat = _gameplay.survivorCombat;
+        if (combat == null)
+        {
+            Check(false, "Gameplay.survivorCombat", "생존자 전투 설정이 필요합니다.");
+        }
+        else
+        {
+            Positive(combat.moveSpeed, "Gameplay.survivorCombat.moveSpeed");
+            Positive(combat.attackRange, "Gameplay.survivorCombat.attackRange");
+            Positive(combat.attackInterval, "Gameplay.survivorCombat.attackInterval");
+            Positive(combat.baseDamage, "Gameplay.survivorCombat.baseDamage");
+            Nonnegative(combat.damagePerCombat, "Gameplay.survivorCombat.damagePerCombat");
+            Nonnegative(combat.towerRangeBonus, "Gameplay.survivorCombat.towerRangeBonus");
+            Positive(combat.towerDamageMultiplier, "Gameplay.survivorCombat.towerDamageMultiplier");
+        }
+
+        var list = _gameplay.survivors ?? Array.Empty<SurvivorData>();
+        Check(list.Length == SURVIVOR_COUNT, "Gameplay.survivors", $"생존자는 {SURVIVOR_COUNT}명이어야 합니다.");
+        Index(list, _entry => _entry.id, "Gameplay.survivors");
+        foreach (var survivor in list)
+        {
+            if (survivor == null || string.IsNullOrEmpty(survivor.id))
+            {
+                continue;
+            }
+
+            string path = "Gameplay.survivors." + survivor.id;
+            Check(!string.IsNullOrEmpty(survivor.displayName), path + ".displayName", "이름이 필요합니다.");
+            IntRange(survivor.combat, STAT_MIN, STAT_MAX, path + ".combat");
+            IntRange(survivor.work, STAT_MIN, STAT_MAX, path + ".work");
+            IntRange(survivor.exploration, STAT_MIN, STAT_MAX, path + ".exploration");
+            Positive(survivor.maxHp, path + ".maxHp");
+        }
+    }
+
+    void ValidateBuildings(BuildingsData _buildings)
+    {
+        if (_buildings == null || _buildings.wall == null || _buildings.tower == null)
+        {
+            Check(false, "Gameplay.buildings", "방벽과 감시탑 설정이 필요합니다.");
+            return;
+        }
+        Positive(_buildings.gridSize, "Gameplay.buildings.gridSize");
+        Positive(_buildings.wall.cost, "Gameplay.buildings.wall.cost");
+        Positive(_buildings.wall.maxHp, "Gameplay.buildings.wall.maxHp");
+        Positive(_buildings.tower.cost, "Gameplay.buildings.tower.cost");
+        Positive(_buildings.tower.maxHp, "Gameplay.buildings.tower.maxHp");
+    }
+
+    void ValidateWaves(GameplayTableData _gameplay)
+    {
+        var enemies = Index(_gameplay.enemies, _entry => _entry.id, "Gameplay.enemies");
+        foreach (var enemy in enemies.Values)
+        {
+            string path = "Gameplay.enemies." + enemy.id;
+            Positive(enemy.maxHp, path + ".maxHp");
+            Positive(enemy.moveSpeed, path + ".moveSpeed");
+            Positive(enemy.attackRange, path + ".attackRange");
+            Positive(enemy.attackInterval, path + ".attackInterval");
+            Positive(enemy.damage, path + ".damage");
+            Positive(enemy.buildingDamageMultiplier, path + ".buildingDamageMultiplier");
+            Nonnegative(enemy.aggroRange, path + ".aggroRange");
+        }
+
+        var waves = _gameplay.waves ?? Array.Empty<WaveData>();
+        Check(waves.Length == WAVE_COUNT, "Gameplay.waves", $"웨이브는 {WAVE_COUNT}개여야 합니다.");
+        for (int i = 0; i < waves.Length; i++)
+        {
+            string path = $"Gameplay.waves[{i}]";
+            if (waves[i] == null)
+            {
+                continue;
+            }
+
+            Nonnegative(waves[i].spawnInterval, path + ".spawnInterval");
+            var spawns = waves[i].spawns ?? Array.Empty<WaveSpawnData>();
+            Check(spawns.Length > 0, path + ".spawns", "스폰이 비어 있습니다.");
+            foreach (var spawn in spawns)
+            {
+                if (spawn == null)
+                {
+                    continue;
+                }
+
+                Reference(spawn.enemyId, path + ".enemyId", enemies.ContainsKey(spawn.enemyId ?? string.Empty), "적");
+                Check(spawn.lane == "west" || spawn.lane == "east", path + ".lane", "west 또는 east여야 합니다.");
+                Positive(spawn.count, path + ".count");
+            }
+        }
+    }
+
+    void ValidateExpeditions(GameplayTableData _gameplay)
+    {
+        var regions = Index(_gameplay.expeditions, _entry => _entry.id, "Gameplay.expeditions");
+        Check(regions.Count == EXPEDITION_REGION_COUNT, "Gameplay.expeditions", $"탐사 지역은 {EXPEDITION_REGION_COUNT}곳이어야 합니다.");
+        foreach (var region in regions.Values)
+        {
+            string path = "Gameplay.expeditions." + region.id;
+            Check(!string.IsNullOrEmpty(region.displayName), path + ".displayName", "이름이 필요합니다.");
+            Positive(region.durationSeconds, path + ".durationSeconds");
+            Check(region.minParty >= 1 && region.minParty <= region.maxParty, path + ".minParty", "1 이상이고 maxParty 이하여야 합니다.");
+            Nonnegative(region.rewardBase, path + ".rewardBase");
+            Nonnegative(region.rewardPerExploration, path + ".rewardPerExploration");
+            Fraction(region.rewardChanceBase, path + ".rewardChanceBase");
+            Fraction(region.deathChanceBase, path + ".deathChanceBase");
+        }
     }
 
     void ValidateUpgrades(TableManager _tables)

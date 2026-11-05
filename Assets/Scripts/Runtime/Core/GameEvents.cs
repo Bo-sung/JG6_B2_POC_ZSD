@@ -53,6 +53,133 @@ public static class GameEvents
         }
     }
 
+    public readonly struct SessionStartInfo
+    {
+        public readonly int seed;
+        public SessionStartInfo(int _seed)
+        {
+            seed = _seed;
+        }
+    }
+    public readonly struct SessionEndInfo
+    {
+        public readonly SessionResult result;
+        public readonly string reason;
+        public SessionEndInfo(SessionResult _result, string _reason)
+        {
+            result = _result;
+            reason = _reason;
+        }
+    }
+    public readonly struct PhaseInfo
+    {
+        public readonly SessionPhase phase;
+        public readonly int waveIndex;
+        public PhaseInfo(SessionPhase _phase, int _waveIndex)
+        {
+            phase = _phase;
+            waveIndex = _waveIndex;
+        }
+    }
+    // work와 defense는 로그와 표시용 문자열이다. 실제 배정은 AssignmentBoard가 가진다.
+    public readonly struct AssignmentInfo
+    {
+        public readonly string survivorId, work, defense;
+        public AssignmentInfo(string _survivorId, string _work, string _defense)
+        {
+            survivorId = _survivorId;
+            work = _work;
+            defense = _defense;
+        }
+    }
+    public readonly struct ExpeditionStartInfo
+    {
+        public readonly string regionId;
+        public readonly string[] party;
+        public ExpeditionStartInfo(string _regionId, string[] _party)
+        {
+            regionId = _regionId;
+            party = _party;
+        }
+    }
+    public readonly struct ExpeditionResultInfo
+    {
+        public readonly string regionId;
+        public readonly int reward;
+        public readonly string[] casualties, returned;
+        public ExpeditionResultInfo(string _regionId, int _reward, string[] _casualties, string[] _returned)
+        {
+            regionId = _regionId;
+            reward = _reward;
+            casualties = _casualties;
+            returned = _returned;
+        }
+    }
+    public readonly struct BuildingInfo
+    {
+        public readonly BuildingType type;
+        public readonly Vector3 position;
+        public readonly int cost;
+        public BuildingInfo(BuildingType _type, Vector3 _position, int _cost)
+        {
+            type = _type;
+            position = _position;
+            cost = _cost;
+        }
+    }
+    public readonly struct WaveStartInfo
+    {
+        public readonly int waveIndex;
+        public WaveStartInfo(int _waveIndex)
+        {
+            waveIndex = _waveIndex;
+        }
+    }
+    public readonly struct WaveEndInfo
+    {
+        public readonly int waveIndex, alive, scrap;
+        public readonly float coreHp;
+        public WaveEndInfo(int _waveIndex, float _coreHp, int _alive, int _scrap)
+        {
+            waveIndex = _waveIndex;
+            coreHp = _coreHp;
+            alive = _alive;
+            scrap = _scrap;
+        }
+    }
+    public readonly struct SurvivorDeathInfo
+    {
+        public readonly string survivorId, cause;
+        public SurvivorDeathInfo(string _survivorId, string _cause)
+        {
+            survivorId = _survivorId;
+            cause = _cause;
+        }
+    }
+
+    // ── POC 이벤트 ──
+    public static event Action<SessionStartInfo> SessionStarted;
+    public static event Action<SessionEndInfo> SessionEnded;
+    public static event Action<PhaseInfo> PhaseChanged;
+    public static event Action<AssignmentInfo> AssignmentChanged;
+    public static event Action<ExpeditionStartInfo> ExpeditionStarted;
+    public static event Action<ExpeditionResultInfo> ExpeditionResolved;
+    public static event Action<BuildingInfo> BuildingPlaced;
+    public static event Action<WaveStartInfo> WaveStarted;
+    public static event Action<WaveEndInfo> WaveEnded;
+    public static event Action<SurvivorDeathInfo> SurvivorDied;
+
+    public static void RaiseSessionStarted(int _seed) => Emit(SessionStarted, new SessionStartInfo(_seed));
+    public static void RaiseSessionEnded(SessionResult _result, string _reason) => Emit(SessionEnded, new SessionEndInfo(_result, _reason));
+    public static void RaisePhaseChanged(SessionPhase _phase, int _waveIndex) => Emit(PhaseChanged, new PhaseInfo(_phase, _waveIndex));
+    public static void RaiseAssignmentChanged(string _survivorId, string _work, string _defense) => Emit(AssignmentChanged, new AssignmentInfo(_survivorId, _work, _defense));
+    public static void RaiseExpeditionStarted(string _regionId, string[] _party) => Emit(ExpeditionStarted, new ExpeditionStartInfo(_regionId, _party));
+    public static void RaiseExpeditionResolved(string _regionId, int _reward, string[] _casualties, string[] _returned) => Emit(ExpeditionResolved, new ExpeditionResultInfo(_regionId, _reward, _casualties, _returned));
+    public static void RaiseBuildingPlaced(BuildingType _type, Vector3 _position, int _cost) => Emit(BuildingPlaced, new BuildingInfo(_type, _position, _cost));
+    public static void RaiseWaveStarted(int _waveIndex) => Emit(WaveStarted, new WaveStartInfo(_waveIndex));
+    public static void RaiseWaveEnded(int _waveIndex, float _coreHp, int _alive, int _scrap) => Emit(WaveEnded, new WaveEndInfo(_waveIndex, _coreHp, _alive, _scrap));
+    public static void RaiseSurvivorDied(string _survivorId, string _cause) => Emit(SurvivorDied, new SurvivorDeathInfo(_survivorId, _cause));
+
     // ── 이벤트 ──
     public static event Action<RunInfo> RunStarted;
     public static event Action<RunInfo> RunEnded;
@@ -109,6 +236,16 @@ public static class GameEvents
         SceneChanged = null;
         UpgradeGranted = null;
         PanelVisibility = null;
+        SessionStarted = null;
+        SessionEnded = null;
+        PhaseChanged = null;
+        AssignmentChanged = null;
+        ExpeditionStarted = null;
+        ExpeditionResolved = null;
+        BuildingPlaced = null;
+        WaveStarted = null;
+        WaveEnded = null;
+        SurvivorDied = null;
         SEQUENCE = 0;
         SceneManager.sceneLoaded -= OnSceneLoaded;
         HOOKED = false;

@@ -4,12 +4,20 @@ using System;
 // 조회는 TableManager, 검증·파생 값 계산은 GameTableRules가 담당한다.
 // 파일명은 데이터 클래스명과 일치시켜야 한다(TableManager.Load가 그 이름으로 읽는다).
 
-// 플레이 공통 수치와 해금 효과 목록. 예시 필드이므로 프로젝트에서 필드를 더하거나 바꾼다.
+// POC 밸런스 수치와 해금 효과 목록. upgrades와 sequence는 템플릿 코드(UpgradeManager)가 쓴다.
 [Serializable]
 public sealed class GameplayTableData
 {
     public string status, note;
-    public PlayerData player;
+    public SessionData session;
+    public CoreData core;
+    public ProductionData production;
+    public SurvivorCombatData survivorCombat;
+    public SurvivorData[] survivors = Array.Empty<SurvivorData>();
+    public BuildingsData buildings;
+    public EnemyData[] enemies = Array.Empty<EnemyData>();
+    public WaveData[] waves = Array.Empty<WaveData>();
+    public ExpeditionRegionData[] expeditions = Array.Empty<ExpeditionRegionData>();
     public UpgradeSequenceData sequence;
     public UpgradeData[] upgrades = Array.Empty<UpgradeData>();
 }

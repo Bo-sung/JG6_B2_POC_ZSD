@@ -1,11 +1,21 @@
 {
-  "status": "template",
+  "status": "poc-initial",
   "note": "씬 진행 경로. 씬 이름이 키이며 배열 순서는 의미하지 않는다. nextScene이 비어 있으면 최종 씬.",
   "scenes": [
     {
-      "scene": "SampleScene",
+      "scene": "Preload",
+      "nextScene": "Title",
+      "restartScene": "Preload"
+    },
+    {
+      "scene": "Title",
+      "nextScene": "Game",
+      "restartScene": "Title"
+    },
+    {
+      "scene": "Game",
       "nextScene": "",
-      "restartScene": "SampleScene"
+      "restartScene": "Game"
     }
   ]
 }
