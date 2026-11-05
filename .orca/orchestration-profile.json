@@ -1,0 +1,33 @@
+{
+  "high": {
+    "executor": "claude",
+    "model": "opus",
+    "verified": false,
+    "fallback": [
+      { "executor": "antigravity", "model": "claude-opus-5-5-high" }
+    ]
+  },
+  "medium": {
+    "executor": "codex",
+    "model": "gpt-6.1-sol",
+    "fallback": [
+      { "executor": "antigravity", "model": "claude-sonnet-5-5-medium" }
+    ]
+  },
+  "low": {
+    "executor": "claude",
+    "model": "haiku",
+    "verified": false,
+    "fallback": [
+      { "executor": "codex", "model": "gpt-6-luna" }
+    ]
+  },
+  "long_running": {
+    "executor": "antigravity",
+    "model": "gemini-3.8-flash-low",
+    "fallback": [
+      { "executor": "opencode", "model": "dgx-spark/qwen3.8-flash-next", "verified": false }
+    ]
+  },
+  "max_parallel": 3
+}
