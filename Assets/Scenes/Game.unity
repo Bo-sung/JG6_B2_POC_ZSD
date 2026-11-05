@@ -2852,6 +2852,7 @@ MonoBehaviour:
   wallPrefab: {fileID: 3747316880719439808, guid: 72ca9542f37d04443a589344e486d590, type: 3}
   towerPrefab: {fileID: 7291525021129280694, guid: e6975d3c38080534e9d6479e0852c590, type: 3}
   placementSkin: 0.01
+  stationAccessHeight: 0.5
 --- !u!4 &866151913
 Transform:
   m_ObjectHideFlags: 0

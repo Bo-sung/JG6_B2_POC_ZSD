@@ -7,7 +7,7 @@ using UnityEditor;
 
 // LogKit 자동 부트스트랩(AfterSceneLoad) 이전에 서버 주소·키를 코드로 넣는다.
 // Debug.Log 계열 로그는 LogKit이 자동 수집해 전송하므로 개별 호출이 필요 없다.
-// 분석용 이벤트는 GameLogger.Data(category, message, data)로 보내고 Docs/PLAY_LOG.md 규칙을 따른다.
+// 분석 이벤트는 LogGameLifecycle → LogSession → FileLogStore에서만 기록한다.
 public static class LogKitSetup
 {
     // LogKit이 큐를 닫기 전에 반드시 한 번 실행해야 하는 작업(판 종료 로그 등)을 여기 등록한다.
@@ -35,9 +35,14 @@ public static class LogKitSetup
         EditorApplication.playModeStateChanged += OnPlayModeChanged;
         EditorApplication.quitting += PrepareEditorQuit;
 #endif
+        // 기본은 로컬 콘솔·오류 수집만 한다. 업로드는 환경 설정을 둘 다 명시한 경우에만 켠다.
         string serverUrl = Environment.GetEnvironmentVariable(SERVER_URL_VARIABLE);
         string apiKey = Environment.GetEnvironmentVariable(UPLOAD_KEY_VARIABLE);
-        if (!string.IsNullOrWhiteSpace(serverUrl) || !string.IsNullOrWhiteSpace(apiKey))
+        bool upload = !string.IsNullOrWhiteSpace(serverUrl) && !string.IsNullOrWhiteSpace(apiKey);
+        GameLogger.Configure(captureUnityLogs: true, uploadOnQuit: upload,
+            retryPendingOnStartup: upload, uploadIntervalSeconds: upload ? 5f : 0f);
+        // 5초는 LogKit 기본 전송 주기이며 게임 밸런스와 무관하다.
+        if (upload)
         {
             // 비어 있는 항목은 기존 값(빌드 설정 또는 Inspector)을 유지한다.
             GameLogger.Configure(

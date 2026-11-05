@@ -16,6 +16,9 @@ public sealed class GameHud : MonoBehaviour
     [SerializeField] BuildController buildController;
     BuildPanelPresenter build;
 
+    [SerializeField] ExpeditionPanelView expeditionView;
+    ExpeditionPanelPresenter expedition;
+
     HudPresenter hud;
     SurvivorListPresenter list;
     SelectionPanelPresenter selection;
@@ -25,6 +28,7 @@ public sealed class GameHud : MonoBehaviour
     // GameSession.Awake 이후에 세션 상태를 읽는다.
     void Start()
     {
+        expedition = new ExpeditionPanelPresenter(expeditionView, session);
         build = new BuildPanelPresenter(buildView, session, buildController);
         hud = new HudPresenter(hudView, session);
         list = new SurvivorListPresenter(listView, session, input);
@@ -32,6 +36,7 @@ public sealed class GameHud : MonoBehaviour
         alert = new AlertPresenter(alertView, session);
         result = new ResultPresenter(resultView, session);
         GameEvents.SurvivorDied += alert.OnSurvivorDied;
+        GameEvents.ExpeditionResolved += alert.OnExpeditionResolved;
     }
 
     void OnDestroy()
@@ -39,11 +44,17 @@ public sealed class GameHud : MonoBehaviour
         if (alert != null)
         {
             GameEvents.SurvivorDied -= alert.OnSurvivorDied;
+            GameEvents.ExpeditionResolved -= alert.OnExpeditionResolved;
         }
     }
 
     void Update()
     {
+        if (expedition == null)
+        {
+            return;
+        }
+        expedition.Refresh();
         build.Refresh();
         hud.Refresh();
         list.Refresh();

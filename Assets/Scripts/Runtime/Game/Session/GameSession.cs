@@ -13,8 +13,11 @@ public readonly struct WaveSummary
     public readonly string[] deaths;
     public readonly int timedOutEnemies;
     public readonly float timeoutDamage;
+    public readonly ExpeditionOutcome[] expeditions;
+    public readonly int destroyedBuildings;
+    public readonly int damagedBuildings;
 
-    public WaveSummary(int _waveNumber, float _coreHp, int _alive, int _scrap, string[] _deaths, int _timedOutEnemies, float _timeoutDamage)
+    public WaveSummary(int _waveNumber, float _coreHp, int _alive, int _scrap, string[] _deaths, int _timedOutEnemies, float _timeoutDamage, ExpeditionOutcome[] _expeditions = null, int _destroyedBuildings = 0, int _damagedBuildings = 0)
     {
         waveNumber = _waveNumber;
         coreHp = _coreHp;
@@ -23,6 +26,9 @@ public readonly struct WaveSummary
         deaths = _deaths;
         timedOutEnemies = _timedOutEnemies;
         timeoutDamage = _timeoutDamage;
+        expeditions = _expeditions ?? Array.Empty<ExpeditionOutcome>();
+        destroyedBuildings = _destroyedBuildings;
+        damagedBuildings = _damagedBuildings;
     }
 }
 
@@ -62,6 +68,42 @@ public sealed class GameSession : MonoBehaviour
     readonly List<SurvivorState> survivors = new List<SurvivorState>();
     readonly Dictionary<string, SurvivorUnit> unitsById = new Dictionary<string, SurvivorUnit>(StringComparer.Ordinal);
     readonly List<BuildingBase> buildings = new List<BuildingBase>();
+    readonly List<ExpeditionOutcome> expeditionHistory = new List<ExpeditionOutcome>();
+    readonly List<ExpeditionOutcome> expeditionsThisWave = new List<ExpeditionOutcome>();
+    int destroyedThisWave;
+    public IReadOnlyList<ExpeditionOutcome> ExpeditionHistory => expeditionHistory;
+    public IReadOnlyList<ExpeditionOutcome> ExpeditionsThisWave => expeditionsThisWave;
+    public int DestroyedThisWave
+    {
+        get
+        {
+            int count = destroyedThisWave;
+            foreach (BuildingBase building in buildings)
+            {
+                // 파괴와 결과 전환이 같은 프레임이어도 아직 정리되지 않은 시설을 센다.
+                if (!building || building.Hp <= 0)
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+    }
+    public int DamagedBuildings
+    {
+        get
+        {
+            int count = 0;
+            foreach (BuildingBase building in buildings)
+            {
+                if (building && building.Hp > 0 && building.IsDamaged)
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+    }
     readonly List<string> deathsThisWave = new List<string>();
 
     public int Seed => seed;
@@ -162,7 +204,7 @@ public sealed class GameSession : MonoBehaviour
 
     void Update()
     {
-        buildings.RemoveAll(_building => !_building);
+        destroyedThisWave += buildings.RemoveAll(_building => !_building || _building.Hp <= 0);
         if (flow.Phase == SessionPhase.Ended || CheckDefeat())
         {
             return;
@@ -235,6 +277,8 @@ public sealed class GameSession : MonoBehaviour
     void EnterPrep()
     {
         deathsThisWave.Clear();
+        expeditionsThisWave.Clear();
+        destroyedThisWave = 0;
         GameEvents.RaisePhaseChanged(flow.Phase, flow.WaveNumber);
         foreach (SurvivorUnit unit in units)
         {
@@ -301,7 +345,7 @@ public sealed class GameSession : MonoBehaviour
 
     void StoreSummary(int _timedOutEnemies, float _timeoutDamage)
     {
-        LastWave = new WaveSummary(flow.WaveNumber, core.Hp, AliveCount, economy.Scrap, deathsThisWave.ToArray(), _timedOutEnemies, _timeoutDamage);
+        LastWave = new WaveSummary(flow.WaveNumber, core.Hp, AliveCount, economy.Scrap, deathsThisWave.ToArray(), _timedOutEnemies, _timeoutDamage, expeditionsThisWave.ToArray(), DestroyedThisWave, DamagedBuildings);
     }
 
     // 결과 화면의 다음 버튼. 세 번째 웨이브 뒤에는 승리로 끝난다.
@@ -584,6 +628,8 @@ public sealed class GameSession : MonoBehaviour
     {
         foreach (ExpeditionOutcome outcome in expeditions.Tick(_deltaTime))
         {
+            expeditionHistory.Add(outcome);
+            expeditionsThisWave.Add(outcome);
             economy.Add(outcome.reward);
             foreach (string id in outcome.casualties)
             {
@@ -595,6 +641,49 @@ public sealed class GameSession : MonoBehaviour
             }
             GameEvents.RaiseExpeditionResolved(outcome.regionId, outcome.reward, outcome.casualties, outcome.returned);
         }
+    }
+
+    public float ExpeditionRemaining(string _id)
+    {
+        foreach (ActiveExpedition expedition in expeditions.Active)
+        {
+            foreach (string id in expedition.party)
+            {
+                if (id == _id)
+                {
+                    return expedition.remainingSeconds;
+                }
+            }
+        }
+        return 0;
+    }
+
+    public string RegionName(string _id)
+    {
+        foreach (ExpeditionRegionData region in table.expeditions)
+        {
+            if (region.id == _id)
+            {
+                return region.displayName;
+            }
+        }
+        return _id;
+    }
+
+    public string SurvivorNames(string[] _ids)
+    {
+        var names = new List<string>();
+        foreach (string id in _ids)
+        {
+            names.Add(FindUnit(id).State.DisplayName);
+        }
+        return names.Count > 0 ? string.Join(", ", names) : "없음";
+    }
+
+    public string DescribeExpedition(ExpeditionOutcome _outcome)
+    {
+        string reward = _outcome.returned.Length == 0 ? "귀환자 없음" : _outcome.reward > 0 ? $"스크랩 +{_outcome.reward}" : "빈손 귀환";
+        return $"{RegionName(_outcome.regionId)} · {reward}\n귀환: {SurvivorNames(_outcome.returned)} / 사망: {SurvivorNames(_outcome.casualties)}";
     }
 
     void ReturnFromExpedition(string _id)

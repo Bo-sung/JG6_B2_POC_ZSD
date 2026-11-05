@@ -14,7 +14,7 @@ public sealed class HudPresenter
 
     public void Refresh()
     {
-        string wave = $"웨이브 {session.WaveNumber}/{session.WaveCount} · {PhaseName(session.Phase)}";
+        string wave = $"시드 {session.Seed} · 웨이브 {session.WaveNumber}/{session.WaveCount} · {PhaseName(session.Phase)}";
         string countdown = HasTimer(session.Phase) ? $"{Mathf.CeilToInt(session.PhaseRemaining)}초" : "-";
         string scrap = $"스크랩 {session.Scrap}";
         string core = $"핵심 시설 {Mathf.CeilToInt(session.Core.Hp)}/{Mathf.CeilToInt(session.Core.MaxHp)}";

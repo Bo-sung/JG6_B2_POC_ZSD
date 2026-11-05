@@ -47,6 +47,11 @@ public sealed class ResultPresenter
         {
             body += $"\n시간 초과: 남은 적 {wave.timedOutEnemies}기로 핵심 시설 피해 {Mathf.CeilToInt(wave.timeoutDamage)}";
         }
+        body += $"\n시설 파괴 {wave.destroyedBuildings}개 · 손상 {wave.damagedBuildings}개\n이번 주기 탐사 {wave.expeditions.Length}건";
+        foreach (ExpeditionOutcome outcome in wave.expeditions)
+        {
+            body += "\n" + session.DescribeExpedition(outcome);
+        }
         return body;
     }
 

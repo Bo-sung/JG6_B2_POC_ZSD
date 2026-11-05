@@ -86,7 +86,7 @@ public static class ProjectValidation
             }
         }
 
-        // 5) 입력: 새 Input System만 사용(activeInputHandler 2 = Input System Package.New only)
+        // 5) 입력: 새 Input System만 사용(activeInputHandler 1 = Input System Package.New only)
         bool newInput = System.Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem") != null;
         if (!newInput)
         {
@@ -98,11 +98,11 @@ public static class ProjectValidation
         {
             issues.Add("Player Settings의 Active Input Handling이 Input Manager(Old)입니다. 새 Input System만 쓰려면 'Input System Package (New)'로 바꿉니다.");
         }
-        else if (handler == "1")
+        else if (handler == "2")
         {
             info.Add("Active Input Handling = Both. 구 Input API를 쓰지 않으므로 'Input System Package (New)'로 조이면 실수를 막을 수 있습니다.");
         }
-        else if (handler == "2")
+        else if (handler == "1")
         {
             info.Add("Active Input Handling = Input System Package (New)");
         }

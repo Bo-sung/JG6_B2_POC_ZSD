@@ -62,7 +62,7 @@ public sealed class SurvivorUnit : MonoBehaviour
 
     public void LeaveTower(TowerBuilding _tower)
     {
-        if (station == _tower)
+        if (ReferenceEquals(station, _tower))
         {
             station = null;
             RefreshTowerVisual();
