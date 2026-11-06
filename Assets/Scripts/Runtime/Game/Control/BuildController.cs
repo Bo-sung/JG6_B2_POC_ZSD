@@ -117,7 +117,8 @@ public sealed class BuildController : MonoBehaviour
         {
             return;
         }
-        if (cancel)
+        // 준비 단계를 벗어나면 건설 모드가 경보·전투의 선택과 명령을 막지 않게 푼다.
+        if (cancel || !session.CanBuild)
         {
             Cancel();
             return;

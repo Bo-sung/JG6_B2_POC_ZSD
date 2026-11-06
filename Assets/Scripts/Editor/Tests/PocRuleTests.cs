@@ -237,6 +237,19 @@ public sealed class PocRuleTests
     }
 
     [Test]
+    public void EarlierDeathRollDoesNotChangeLaterExpeditionOutcome()
+    {
+        for (int seed = 0; seed < 100; seed++)
+        {
+            ExpeditionOutcome afterSafe = SecondOutcome(0, seed);
+            ExpeditionOutcome afterDeath = SecondOutcome(1, seed);
+            Assert.That(afterDeath.reward, Is.EqualTo(afterSafe.reward));
+            Assert.That(afterDeath.casualties, Is.EqualTo(afterSafe.casualties));
+            Assert.That(afterDeath.returned, Is.EqualTo(afterSafe.returned));
+        }
+    }
+
+    [Test]
     public void ActualProjectTablesAreValid()
     {
         TableManager.Reload();
@@ -256,6 +269,19 @@ public sealed class PocRuleTests
     static ExpeditionMember[] Party(int _count)
     {
         return Enumerable.Range(0, _count).Select(_index => new ExpeditionMember("s" + _index, 1)).ToArray();
+    }
+
+    static ExpeditionOutcome SecondOutcome(float _firstDeathChance, int _seed)
+    {
+        ExpeditionRegionData first = Region();
+        first.id = "first";
+        first.deathChanceBase = _firstDeathChance;
+        ExpeditionRegionData second = Region();
+        var system = new ExpeditionSystem(new[] { first, second }, new Random(_seed));
+        Assert.That(system.TryStart(first.id, Party(3), out _), Is.True);
+        system.Tick(first.durationSeconds);
+        Assert.That(system.TryStart(second.id, Party(3), out _), Is.True);
+        return system.Tick(second.durationSeconds)[0];
     }
 
     static ExpeditionOutcome Resolve(ExpeditionRegionData _region, ExpeditionMember[] _party, int _seed)

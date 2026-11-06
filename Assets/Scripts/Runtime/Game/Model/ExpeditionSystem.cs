@@ -128,7 +128,9 @@ public sealed class ExpeditionSystem
             ExpeditionRegionData region = regions[expedition.regionId];
             bool rewarded = random.NextDouble() < RewardChance(region.id, expedition.Exploration);
             bool died = random.NextDouble() < DeathChance(region.id, expedition.Exploration, expedition.party.Count);
-            int casualty = died ? random.Next(expedition.party.Count) : -1;
+            // 사망 여부와 무관하게 난수를 3회 소비한다. 같은 시드 비교에서 뒤따르는 파견의 결과가 갈리지 않게 한다.
+            int victim = random.Next(expedition.party.Count);
+            int casualty = died ? victim : -1;
             var returned = new List<string>();
             var casualties = new List<string>();
             for (int memberIndex = 0; memberIndex < expedition.party.Count; memberIndex++)

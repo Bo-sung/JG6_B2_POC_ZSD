@@ -9,6 +9,8 @@ public sealed class SurvivorUnit : MonoBehaviour
 {
     // 동시에 탐지할 적 수의 상한. 웨이브 편성보다 넉넉하면 되는 버퍼 크기이며 밸런스 수치가 아니다.
     const int TARGET_BUFFER_SIZE = 32;
+    // 사선 한 줄에 겹치는 차폐물 수의 상한. 소형 맵이면 충분한 버퍼 크기이며 밸런스 수치가 아니다.
+    const int SIGHT_BUFFER_SIZE = 8;
 
     // 밸런스가 아닌 이동·표시 보정값이다. 프리팹에서 조정한다.
     [SerializeField] float arrivalTolerance = 0.6f;
@@ -22,6 +24,7 @@ public sealed class SurvivorUnit : MonoBehaviour
     [SerializeField] DefenseMarkerView defenseMarker;
 
     readonly Collider[] targetBuffer = new Collider[TARGET_BUFFER_SIZE];
+    readonly RaycastHit[] sightBuffer = new RaycastHit[SIGHT_BUFFER_SIZE];
     NavMeshAgent agent;
     SurvivorCombatData combat;
     ICombatStation station;
@@ -373,7 +376,22 @@ public sealed class SurvivorUnit : MonoBehaviour
     {
         Vector3 from = FiringOrigin + Vector3.up * sightHeight;
         Vector3 to = _enemy.transform.position + Vector3.up * sightHeight;
-        return !Physics.Linecast(from, to, GameLayers.OBSTACLE_MASK, QueryTriggerInteraction.Ignore);
+        TowerBuilding tower = OccupiedTower;
+        if (!tower)
+        {
+            return !Physics.Linecast(from, to, GameLayers.OBSTACLE_MASK, QueryTriggerInteraction.Ignore);
+        }
+        // 탑승자의 사선은 자기 탑 몸체에 막히지 않는다. 그래야 탑에 붙은 적도 쏠 수 있다.
+        Vector3 line = to - from;
+        int count = Physics.RaycastNonAlloc(from, line.normalized, sightBuffer, line.magnitude, GameLayers.OBSTACLE_MASK, QueryTriggerInteraction.Ignore);
+        for (int index = 0; index < count; index++)
+        {
+            if (sightBuffer[index].collider.GetComponentInParent<TowerBuilding>() != tower)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     void FireAt(EnemyUnit _enemy)
