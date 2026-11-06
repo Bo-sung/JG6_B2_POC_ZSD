@@ -25,7 +25,9 @@ public sealed class AlertPresenter
     public void OnExpeditionResolved(GameEvents.ExpeditionResultInfo _info)
     {
         string prefix = _info.returned.Length == 0 ? "탐사 종료 · " : session.Phase == SessionPhase.Combat ? "전투 중 귀환! " : "탐사 귀환 · ";
-        notices.Enqueue(prefix + session.DescribeExpedition(new ExpeditionOutcome(_info.regionId, _info.reward, _info.casualties, _info.returned)));
+        SurvivorUnit rescued = session.FindUnit(_info.rescuedId);
+        SurvivorData rescuedData = rescued != null ? new SurvivorData { displayName = rescued.State.DisplayName } : null;
+        notices.Enqueue(prefix + session.DescribeExpedition(new ExpeditionOutcome(_info.regionId, _info.reward, _info.casualties, _info.returned, _info.expeditionId, _info.withdrawn, rescuedData)));
     }
 
     public void Refresh()

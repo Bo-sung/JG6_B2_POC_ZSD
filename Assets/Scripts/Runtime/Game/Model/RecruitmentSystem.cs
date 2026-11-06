@@ -43,8 +43,9 @@ public sealed class RecruitmentSystem
     public const string REASON_EXPIRED = "expired";
     public const string REASON_NO_SCRAP = "no_scrap";
     public const string REASON_FULL = "full";
-    // SurvivorJoined의 출처. 구조(G3)는 자신의 값을 추가한다.
+    // SurvivorJoined의 출처.
     public const string SOURCE_VISITOR = "visitor";
+    public const string SOURCE_RESCUE = "rescue";
 
     readonly int capacity;
     readonly int visitorCost;
@@ -94,7 +95,7 @@ public sealed class RecruitmentSystem
     // 수용 상한의 유일한 판정. aliveCount는 파견·중상 인원을 포함한 살아 있는 수다.
     public bool HasCapacity(int _aliveCount) => _aliveCount + reservedSlots < capacity;
 
-    // 귀환 예정 구조자의 자리 예약(G3). 예약은 상한 판정에 포함되고 같은 술어로 막는다.
+    // 귀환 예정 구조자의 자리 예약. 예약은 상한 판정에 포함되고 같은 술어로 막는다.
     public bool ReserveSlot(int _aliveCount)
     {
         if (!HasCapacity(_aliveCount))
@@ -166,7 +167,7 @@ public sealed class RecruitmentSystem
     // 합류 인력의 새 ID. 세션 순번으로 만들어 후보 ID와 무관하고 재사용이 없다(V2-IMPL-09).
     public string IssueNewId() => "n" + (++joinedCount).ToString(CultureInfo.InvariantCulture);
 
-    // 구조 몫의 다음 후보를 꺼낸다(G3). 없으면 null.
+    // 구조 몫의 다음 후보를 꺼낸다. 없으면 null.
     public SurvivorData TakeRescueCandidate() => rescueShare.Count > 0 ? rescueShare.Dequeue() : null;
 
     VisitorRecord VisitorOf(int _wave)

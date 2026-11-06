@@ -96,23 +96,61 @@ public static class GameEvents
     {
         public readonly string regionId;
         public readonly string[] party;
-        public ExpeditionStartInfo(string _regionId, string[] _party)
+        public readonly int expeditionId;
+        public ExpeditionStartInfo(string _regionId, string[] _party, int _expeditionId = 0)
         {
             regionId = _regionId;
             party = _party;
+            expeditionId = _expeditionId;
         }
     }
+    // rescuedId는 이 정산에서 합류한 구조 인력의 새 ID다. 없으면 null이다.
     public readonly struct ExpeditionResultInfo
     {
-        public readonly string regionId;
-        public readonly int reward;
+        public readonly string regionId, rescuedId;
+        public readonly int reward, expeditionId;
         public readonly string[] casualties, returned;
-        public ExpeditionResultInfo(string _regionId, int _reward, string[] _casualties, string[] _returned)
+        public readonly bool withdrawn;
+        public ExpeditionResultInfo(string _regionId, int _reward, string[] _casualties, string[] _returned, int _expeditionId = 0, bool _withdrawn = false, string _rescuedId = null)
         {
             regionId = _regionId;
             reward = _reward;
             casualties = _casualties;
             returned = _returned;
+            expeditionId = _expeditionId;
+            withdrawn = _withdrawn;
+            rescuedId = _rescuedId;
+        }
+    }
+    // 필드 이름은 기준서 7.4를 따른다. decision의 값은 rescue·search·continue·withdraw·timeout·forced다.
+    public readonly struct ExpeditionEventRaisedInfo
+    {
+        public readonly int expeditionId;
+        public readonly string type;
+        public ExpeditionEventRaisedInfo(int _expeditionId, string _type)
+        {
+            expeditionId = _expeditionId;
+            type = _type;
+        }
+    }
+    public readonly struct ExpeditionEventDecisionInfo
+    {
+        public readonly int expeditionId;
+        public readonly string decision;
+        public ExpeditionEventDecisionInfo(int _expeditionId, string _decision)
+        {
+            expeditionId = _expeditionId;
+            decision = _decision;
+        }
+    }
+    public readonly struct ExpeditionEventResolvedInfo
+    {
+        public readonly int expeditionId;
+        public readonly string outcome;
+        public ExpeditionEventResolvedInfo(int _expeditionId, string _outcome)
+        {
+            expeditionId = _expeditionId;
+            outcome = _outcome;
         }
     }
     public readonly struct BuildingInfo
@@ -272,6 +310,9 @@ public static class GameEvents
     public static event Action<AssignmentInfo> AssignmentChanged;
     public static event Action<ExpeditionStartInfo> ExpeditionStarted;
     public static event Action<ExpeditionResultInfo> ExpeditionResolved;
+    public static event Action<ExpeditionEventRaisedInfo> ExpeditionEventRaised;
+    public static event Action<ExpeditionEventDecisionInfo> ExpeditionEventDecided;
+    public static event Action<ExpeditionEventResolvedInfo> ExpeditionEventResolved;
     public static event Action<BuildingInfo> BuildingPlaced;
     public static event Action<WaveStartInfo> WaveStarted;
     public static event Action<WaveEndInfo> WaveEnded;
@@ -292,8 +333,11 @@ public static class GameEvents
     public static void RaiseSessionEnded(SessionResult _result, string _reason) => Emit(SessionEnded, new SessionEndInfo(_result, _reason));
     public static void RaisePhaseChanged(SessionPhase _phase, int _waveIndex) => Emit(PhaseChanged, new PhaseInfo(_phase, _waveIndex));
     public static void RaiseAssignmentChanged(string _survivorId, string _work, string _defense) => Emit(AssignmentChanged, new AssignmentInfo(_survivorId, _work, _defense));
-    public static void RaiseExpeditionStarted(string _regionId, string[] _party) => Emit(ExpeditionStarted, new ExpeditionStartInfo(_regionId, _party));
-    public static void RaiseExpeditionResolved(string _regionId, int _reward, string[] _casualties, string[] _returned) => Emit(ExpeditionResolved, new ExpeditionResultInfo(_regionId, _reward, _casualties, _returned));
+    public static void RaiseExpeditionStarted(string _regionId, string[] _party, int _expeditionId = 0) => Emit(ExpeditionStarted, new ExpeditionStartInfo(_regionId, _party, _expeditionId));
+    public static void RaiseExpeditionResolved(string _regionId, int _reward, string[] _casualties, string[] _returned, int _expeditionId = 0, bool _withdrawn = false, string _rescuedId = null) => Emit(ExpeditionResolved, new ExpeditionResultInfo(_regionId, _reward, _casualties, _returned, _expeditionId, _withdrawn, _rescuedId));
+    public static void RaiseExpeditionEventRaised(int _expeditionId, string _type) => Emit(ExpeditionEventRaised, new ExpeditionEventRaisedInfo(_expeditionId, _type));
+    public static void RaiseExpeditionEventDecided(int _expeditionId, string _decision) => Emit(ExpeditionEventDecided, new ExpeditionEventDecisionInfo(_expeditionId, _decision));
+    public static void RaiseExpeditionEventResolved(int _expeditionId, string _outcome) => Emit(ExpeditionEventResolved, new ExpeditionEventResolvedInfo(_expeditionId, _outcome));
     public static void RaiseBuildingPlaced(BuildingType _type, Vector3 _position, int _cost, string _id = null) => Emit(BuildingPlaced, new BuildingInfo(_type, _position, _cost, _id));
     public static void RaiseWaveStarted(int _waveIndex) => Emit(WaveStarted, new WaveStartInfo(_waveIndex));
     public static void RaiseWaveEnded(int _waveIndex, float _coreHp, int _alive, int _scrap) => Emit(WaveEnded, new WaveEndInfo(_waveIndex, _coreHp, _alive, _scrap));
@@ -372,6 +416,9 @@ public static class GameEvents
         AssignmentChanged = null;
         ExpeditionStarted = null;
         ExpeditionResolved = null;
+        ExpeditionEventRaised = null;
+        ExpeditionEventDecided = null;
+        ExpeditionEventResolved = null;
         BuildingPlaced = null;
         WaveStarted = null;
         WaveEnded = null;

@@ -61,7 +61,7 @@ public sealed class VisitorPanelPresenter
             + $"전투 {candidate.combat} · 작업 {candidate.work} · 탐사 {candidate.exploration}\n"
             + $"특성: {SurvivorLabels.Trait(candidate.trait)}\n"
             + $"영입 비용: 스크랩 {session.Recruitment.VisitorCost}\n"
-            + $"현재 인원 {session.AliveCount}/{session.Recruitment.Capacity}";
+            + $"현재 {ExpeditionLabels.Headcount(session.AliveCount, session.Recruitment.Capacity, 0, session.Recruitment.ReservedSlots)}";
         view.Show(title, info, StatusOf());
     }
 

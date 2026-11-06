@@ -21,6 +21,7 @@ public sealed class GameplayTableData
     public EnemyData[] enemies = Array.Empty<EnemyData>();
     public WaveData[] waves = Array.Empty<WaveData>();
     public ExpeditionRegionData[] expeditions = Array.Empty<ExpeditionRegionData>();
+    public ExpeditionEventData expeditionEvents;
     public UpgradeSequenceData sequence;
     public UpgradeData[] upgrades = Array.Empty<UpgradeData>();
 }

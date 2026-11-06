@@ -75,6 +75,7 @@ public sealed class ExpeditionPanelTests
         preview = Label(); dispatch = Button();
         Set(view, "previewText", preview); Set(view, "statusText", Label());
         Set(view, "activeText", Label()); Set(view, "historyText", Label()); Set(view, "dispatchButton", dispatch);
+        Set(view, "eventRoot", Label().gameObject);
         presenter = new ExpeditionPanelPresenter(view, session);
     }
 

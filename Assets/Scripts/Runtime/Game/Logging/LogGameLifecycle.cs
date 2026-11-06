@@ -12,6 +12,9 @@ public sealed class LogGameLifecycle : MonoBehaviour
         GameEvents.AssignmentChanged += OnAssignmentChanged;
         GameEvents.ExpeditionStarted += OnExpeditionStarted;
         GameEvents.ExpeditionResolved += OnExpeditionResolved;
+        GameEvents.ExpeditionEventRaised += OnExpeditionEventRaised;
+        GameEvents.ExpeditionEventDecided += OnExpeditionEventDecided;
+        GameEvents.ExpeditionEventResolved += OnExpeditionEventResolved;
         GameEvents.BuildingPlaced += OnBuildingPlaced;
         GameEvents.WaveStarted += OnWaveStarted;
         GameEvents.SurvivorDied += OnSurvivorDied;
@@ -37,6 +40,9 @@ public sealed class LogGameLifecycle : MonoBehaviour
         GameEvents.AssignmentChanged -= OnAssignmentChanged;
         GameEvents.ExpeditionStarted -= OnExpeditionStarted;
         GameEvents.ExpeditionResolved -= OnExpeditionResolved;
+        GameEvents.ExpeditionEventRaised -= OnExpeditionEventRaised;
+        GameEvents.ExpeditionEventDecided -= OnExpeditionEventDecided;
+        GameEvents.ExpeditionEventResolved -= OnExpeditionEventResolved;
         GameEvents.BuildingPlaced -= OnBuildingPlaced;
         GameEvents.WaveStarted -= OnWaveStarted;
         GameEvents.SurvivorDied -= OnSurvivorDied;
@@ -89,7 +95,7 @@ public sealed class LogGameLifecycle : MonoBehaviour
     {
         Write("ExpeditionStarted", new Dictionary<string, object>
         {
-            { "region", _info.regionId }, { "party", _info.party }
+            { "expeditionId", _info.expeditionId }, { "region", _info.regionId }, { "party", _info.party }
         });
     }
 
@@ -97,8 +103,33 @@ public sealed class LogGameLifecycle : MonoBehaviour
     {
         Write("ExpeditionResolved", new Dictionary<string, object>
         {
-            { "region", _info.regionId }, { "reward", _info.reward },
-            { "casualties", _info.casualties }, { "returned", _info.returned }
+            { "expeditionId", _info.expeditionId }, { "region", _info.regionId }, { "reward", _info.reward },
+            { "casualties", _info.casualties }, { "returned", _info.returned },
+            { "withdrawn", _info.withdrawn }, { "rescuedId", _info.rescuedId }
+        });
+    }
+
+    void OnExpeditionEventRaised(GameEvents.ExpeditionEventRaisedInfo _info)
+    {
+        Write("ExpeditionEventRaised", new Dictionary<string, object>
+        {
+            { "expeditionId", _info.expeditionId }, { "type", _info.type }
+        });
+    }
+
+    void OnExpeditionEventDecided(GameEvents.ExpeditionEventDecisionInfo _info)
+    {
+        Write("ExpeditionEventDecision", new Dictionary<string, object>
+        {
+            { "expeditionId", _info.expeditionId }, { "decision", _info.decision }
+        });
+    }
+
+    void OnExpeditionEventResolved(GameEvents.ExpeditionEventResolvedInfo _info)
+    {
+        Write("ExpeditionEventResolved", new Dictionary<string, object>
+        {
+            { "expeditionId", _info.expeditionId }, { "outcome", _info.outcome }
         });
     }
 

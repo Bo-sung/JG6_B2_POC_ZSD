@@ -11,6 +11,9 @@ public sealed class HudView : MonoBehaviour
     [SerializeField] UnityEngine.UI.Text survivorText;
     // 방문 대기 중에만 켜지는 '방문자 도착' 항목.
     [SerializeField] UnityEngine.UI.Button visitorButton;
+    // 대기 중인 탐사 사건이 있을 때만 켜지는 경고. 탐사 패널은 항상 보이므로 누를 것이 없다(TD-35).
+    [SerializeField] GameObject expeditionEventNotice;
+    [SerializeField] UnityEngine.UI.Text expeditionEventLabel;
     // 치료소 패널을 여는 항목. 진행 상태를 함께 보여 준다.
     [SerializeField] UnityEngine.UI.Button treatmentButton;
     [SerializeField] UnityEngine.UI.Text treatmentLabel;
@@ -57,6 +60,12 @@ public sealed class HudView : MonoBehaviour
     public void ShowTreatment(string _label)
     {
         treatmentLabel.text = _label;
+    }
+
+    public void ShowExpeditionEventNotice(int _count, string _label)
+    {
+        expeditionEventNotice.SetActive(_count > 0);
+        expeditionEventLabel.text = _label;
     }
 
     // 방문 대기 중에만 '방문자 도착' 항목을 켠다.

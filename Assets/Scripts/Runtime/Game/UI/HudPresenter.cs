@@ -20,14 +20,18 @@ public sealed class HudPresenter
         string scrap = $"스크랩 {session.Scrap}";
         string core = $"핵심 시설 {Mathf.CeilToInt(session.Core.Hp)}/{Mathf.CeilToInt(session.Core.MaxHp)}";
         // 인원 현재/최대는 파견·중상 인원을 포함한 살아 있는 수 기준이다.
-        int away = session.AwayCount;
-        string survivors = away > 0
-            ? $"인원 {session.AliveCount}/{session.Capacity} (파견 {away})"
-            : $"인원 {session.AliveCount}/{session.Capacity}";
         view.ShowSpeed(session.SpeedOptions, session.Speed);
         view.ShowVisitorNotice(session.Recruitment.PendingVisitor != null);
+        view.ShowExpeditionEventNotice(session.Expeditions.PendingEventCount, EventNoticeLabel());
         view.ShowTreatment(TreatmentLabel(session.Treatment.Current));
-        view.Show(wave, countdown, scrap, core, survivors);
+        view.Show(wave, countdown, scrap, core, ExpeditionLabels.Headcount(session.AliveCount, session.Capacity, session.AwayCount, session.Recruitment.ReservedSlots));
+    }
+
+    // 먼저 만료되는 사건의 남은 초를 함께 보여 준다. 패널을 자동으로 열지 않는다(TD-35).
+    string EventNoticeLabel()
+    {
+        ActiveExpedition next = session.Expeditions.NextPendingEvent;
+        return next != null ? $"탐사 사건 {session.Expeditions.PendingEventCount}건 · {Mathf.CeilToInt(next.Event.TimeoutRemaining)}초" : string.Empty;
     }
 
     static string TreatmentLabel(TreatmentJob _job)

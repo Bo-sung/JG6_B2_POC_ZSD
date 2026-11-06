@@ -117,6 +117,24 @@ public sealed class PocDebug : MonoBehaviour
         }
     }
 
+    // 진행 중인 탐사에 사건을 일으킨다(G6 검증용). _outcomeRoll은 0~1이고 음수면 파견 때 뽑은 값을 쓴다.
+    public void RaiseExpeditionEvent(ExpeditionEventType _type, double _outcomeRoll = -1)
+    {
+        if (!session.DebugRaiseExpeditionEvent(_type, out string error, _outcomeRoll))
+        {
+            Debug.LogWarning($"디버그 사건 실패: {error}");
+        }
+    }
+
+    [ContextMenu("탐사 사건: 생존자 발견")]
+    public void RaiseRescueEvent() => RaiseExpeditionEvent(ExpeditionEventType.Rescue);
+
+    [ContextMenu("탐사 사건: 추가 보급품")]
+    public void RaiseSupplyEvent() => RaiseExpeditionEvent(ExpeditionEventType.Supply);
+
+    [ContextMenu("탐사 사건: 적대 생물 조우")]
+    public void RaiseEncounterEvent() => RaiseExpeditionEvent(ExpeditionEventType.Encounter);
+
     [ContextMenu("웨이브 재시작")]
     public void RestartWave() => session.DebugRestartWave();
 }

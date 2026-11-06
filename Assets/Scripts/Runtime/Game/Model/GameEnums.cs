@@ -37,3 +37,27 @@ public enum InjuryStatus
     Critical,
     Dead,
 }
+
+// 탐사 사건 3종(기준서 4.4). 구조와 보급은 선택, 조우는 강제다.
+public enum ExpeditionEventType
+{
+    Rescue,
+    Supply,
+    Encounter,
+}
+
+public enum ExpeditionEventState
+{
+    Scheduled,
+    Pending,
+    Resolved,
+}
+
+// 사건에 대한 대응. Act는 맥락 행동(구조 시도·추가 수색)이고 Timeout은 미응답으로 끝난 '임무 계속'이다.
+public enum ExpeditionDecision
+{
+    Act,
+    Continue,
+    Withdraw,
+    Timeout,
+}

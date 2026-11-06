@@ -14,9 +14,16 @@ public sealed class ExpeditionPanelView : MonoBehaviour
     [SerializeField] Text statusText;
     [SerializeField] Text activeText;
     [SerializeField] Text historyText;
+    // 대기 사건 영역. 버튼 순서는 맥락 행동·임무 계속·철수다.
+    [SerializeField] GameObject eventRoot;
+    [SerializeField] Text eventText;
+    [SerializeField] Text eventStatusText;
+    [SerializeField] Button[] eventButtons;
+    [SerializeField] Text[] eventButtonLabels;
     public event Action<int> RegionClicked;
     public event Action<int> MemberClicked;
     public event Action DispatchClicked;
+    public event Action<int> EventActionClicked;
 
     public int MemberCount => memberButtons.Length;
 
@@ -30,6 +37,26 @@ public sealed class ExpeditionPanelView : MonoBehaviour
             int captured = index;
             memberButtons[index].onClick.AddListener(() => MemberClicked?.Invoke(captured));
         }
+        for (int index = 0; index < eventButtons.Length; index++)
+        {
+            int captured = index;
+            eventButtons[index].onClick.AddListener(() => EventActionClicked?.Invoke(captured));
+        }
+    }
+
+    public void HideEvent()
+    {
+        eventRoot.SetActive(false);
+    }
+
+    // _actionLabel이 비어 있으면(조우 뒤) 맥락 행동 버튼을 숨긴다.
+    public void ShowEvent(string _text, string _status, string _actionLabel)
+    {
+        eventRoot.SetActive(true);
+        eventText.text = _text;
+        eventStatusText.text = _status;
+        eventButtons[0].gameObject.SetActive(!string.IsNullOrEmpty(_actionLabel));
+        eventButtonLabels[0].text = _actionLabel;
     }
 
     public void ShowMember(int _index, string _label, bool _available)

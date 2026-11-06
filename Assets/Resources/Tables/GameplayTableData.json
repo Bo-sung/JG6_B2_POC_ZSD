@@ -114,7 +114,11 @@
       "rewardPerExploration": 0.5,
       "deathChanceBase": 0.16,
       "deathChancePerExploration": -0.008,
-      "deathChancePerExtraMember": -0.01
+      "deathChancePerExtraMember": -0.01,
+      "eventChance": 0.4,
+      "rescueWeight": 30,
+      "supplyWeight": 40,
+      "encounterWeight": 30
     },
     {
       "id": "far",
@@ -130,9 +134,22 @@
       "rewardPerExploration": 1,
       "deathChanceBase": 0.4,
       "deathChancePerExploration": -0.015,
-      "deathChancePerExtraMember": -0.04
+      "deathChancePerExtraMember": -0.04,
+      "eventChance": 0.6,
+      "rescueWeight": 30,
+      "supplyWeight": 30,
+      "encounterWeight": 40
     }
   ],
+  "expeditionEvents": {
+    "triggerMinFraction": 0.3,
+    "triggerMaxFraction": 0.7,
+    "timeoutSeconds": 15,
+    "withdrawSeconds": 20,
+    "rescue": { "extraSeconds": 15, "chanceBase": 0.4, "chancePerExploration": 0.06, "chanceMax": 0.9, "failureDamageFraction": 0.2 },
+    "supply": { "extraSeconds": 15, "bonusRewardFraction": 0.5, "damageChance": 0.2, "damageFraction": 0.2 },
+    "encounter": { "delaySeconds": 10, "damageMinFraction": 0.2, "damageMaxFraction": 0.4, "damageReductionPerCombat": 0.02 }
+  },
   "sequence": {
     "firstUpgrade": "sample.doubleDash"
   },

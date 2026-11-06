@@ -17,7 +17,8 @@
 | `Game/Model` | `SurvivorState` | ID·이름·능력치·HP·생존·임무. Unity 비의존 |
 | `Game/Model` | `AssignmentBoard` | 작업(생산/방어 대기)과 방어 위치(지점/감시탑)를 독립 저장. 정원·사망·파견 규칙 |
 | `Game/Model` | `ResourceEconomy` | 스크랩, 생산 누적, 비용 차감. 음수 금지 |
-| `Game/Model` | `ExpeditionSystem` | 파견·시간 경과·결과 판정(DEC-16) |
+| `Game/Model` | `ExpeditionSystem` | 파견·시간 경과·결과 판정(DEC-16), 사건 계획과 대기 상태 |
+| `Game/Model` | `ExpeditionEventRules` | 사건의 판정 공식 한 곳(유형, 시점, 구조 성공률, 피해 비율). 난수 값은 호출 측이 넘긴다 |
 | `Game/Model` | `RecruitmentSystem` | 인력 수급: 수용 상한 판정(살아 있는 인원+예약 < capacity), 방문 후보 추첨, 신규 ID 발급, 방문 상태. G3 구조 예약 API 포함 |
 | `Game/Model` | `InjuryRules` | HP에서 부상 상태 파생, 효율, 적 표적 우선순위. 수치는 `injury` 테이블 |
 | `Game/Model` | `TreatmentSystem` | 치료 1건의 시작 조건, 진행률, 일시정지·재개·담당자 교체, 비용 1회 차감. 시간은 호출 측이 넘긴다 |
@@ -94,6 +95,17 @@ Prep 중 직접 이동한 인력은 생산에 기여하지 않고, 선택 패널
 - **경보와 재개.** 경보에 멈추고(`TreatmentPaused`) 담당자와 경상 환자는 방어로 간다. 다음 준비 시작에 같은 담당자가 행동 가능하면 자동 재개(`TreatmentResumed`), 아니면 패널에서 `TryAssignTreatmentWorker`로 새 담당자를 지정할 때까지 기다린다. 재개는 무료이고, 환자 사망·취소는 환불 없이 끝난다(`TreatmentCancelled`).
 - **정원.** `AssignmentBoard`는 `TreatmentSystem.Involves`를 받아 치료에 묶인 인원을 정원에서 뺀다. 치료가 끝나거나 회복하면 `ResolveReturn`으로 정원을 다시 보고 찼으면 방어 대기로 돌린다.
 - 치료소는 `Infirmary.prefab`을 `Environment` 아래 배치해 NavMesh에 포함했다. 건설 허용 구역 밖이고 건설 메뉴에 없다.
+
+## 탐사 사건과 구조 (v2)
+
+- **결정 시점.** `TryStart`가 `expedition_event` 스트림에서 난수 5개(발생, 유형, 시점, 판정, 피해자)를 뽑아 탐사당 최대 1건을 계획한다. 발생하지 않아도 5개를 소비하고, 판정 난수도 이때 뽑아 두므로 플레이어의 결정이 다른 탐사의 사건을 바꾸지 않는다. 탐사 결과 스트림 `expedition`은 사건과 섞지 않으며, 철수·전멸도 정산 때 v1과 같이 3개를 소비한다(V2-IMPL-10).
+- **틱 순서.** `GameSession.TickExpeditions`가 `Advance`(시간 경과, 도착한 사건을 대기로) → 후보 없는 구조를 보급으로 대체 → 도착 처리(조우는 여기서 자동 해결) → `ExpiredEvents`를 `Timeout`으로 처리 → `CollectFinished` 순으로 부른다. 결과 단계에서는 부르지 않으므로 타이머도 멈춘다.
+- **권위 경로.** 사건 대응은 패널 버튼과 미응답 타이머 모두 `TryResolveExpeditionEvent(expeditionId, decision, out error)` 하나로 온다. 상태는 `대기 → 해결`이고 해결된 사건의 두 번째 호출은 false다. 구조는 상태를 바꾸기 전에 후보 → 상한 순으로 검사하므로, 거부되면 아무것도 소비하지 않고 사건이 대기로 남으며 `RecruitmentRejected(full)`이 기록된다. 판정은 고른 순간 끝나고 성공하면 그 자리에서 `ReserveSlot`과 `TakeRescueCandidate`를 한다(V2-IMPL-11).
+- **조우와 철수.** 조우는 도착 순간 `forced`로 해결된다. 파티가 살아 있으면 같은 타이머로 철수 기회(`IsWithdrawOffered`)가 열린다. 이 응답은 `ExpeditionEventDecision`만 남기고 `ExpeditionEventResolved`를 다시 내지 않는다. 철수는 남은 시간을 `withdrawSeconds` 이하로 줄이고 정산에서 보상과 사망 판정을 뺀다(V2-IMPL-12).
+- **정산 플래그.** `CollectFinished`가 시간이 끝났거나 살아 있는 파티원이 없는 탐사를 처리하고 `IsSettled`를 켠 뒤 목록에서 뺀다. 살아 있는 파티의 대기 사건이 남아 있으면 먼저 끝낸다. 사망 판정과 보상은 `_isAlive`로 거른 살아 있는 파티원만 본다. 사건 피해는 `SurvivorUnit.ApplyDamage` 단일 경로로 해결 순간 적용하고, 사망한 파티원은 `casualties`에 들어가지만 `Kill`이 다시 사망을 내지 않는다(V2-IMPL-13).
+- **합류.** `SettleFinishedExpeditions`가 보상 → 사망 → 귀환 → 예약 해제 → 합류 순으로 처리한다. 귀환자가 있으면 `JoinSurvivor(candidate, "rescue")`로 한 번 합류하고 ID는 그때 새로 발급한다. 전멸이면 예약만 풀고 후보는 큐로 돌리지 않는다. 상한은 `살아 있는 인원 + 예약`이므로 방문 영입과 다른 탐사의 구조에도 같은 판정이 적용된다.
+- **표시.** `ExpeditionPanelView`의 `EventArea`가 먼저 만료되는 사건과 `대기 사건 n건`을 보여 주고, 패널 왼쪽에 붙어 9명 행을 가리지 않는다. HUD는 `ExpeditionEventNotice`를 켜고 패널을 열지 않는다(TD-35). 위험 계산은 `ExpeditionEventRules`에 모여 있어 G4 `scout`의 감소를 여기에 곱하면 된다.
+- **로그.** `ExpeditionStarted`와 `ExpeditionResolved`에 `expeditionId`를 넣었다. `decision` 값은 `rescue`, `search`, `continue`, `withdraw`, `timeout`, `forced`이고, `outcome` 값은 `rescue_success`, `rescue_failed`, `search_safe`, `search_hurt`, `encounter`, `continued`, `withdrawn`이다.
 
 ## 이벤트
 

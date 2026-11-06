@@ -137,6 +137,47 @@ public sealed class ExpeditionRegionData
     public int minParty, maxParty;
     public float rewardChanceBase, rewardChancePerExploration, rewardBase, rewardPerExploration;
     public float deathChanceBase, deathChancePerExploration, deathChancePerExtraMember;
+    // 사건 발생 확률과 유형 가중치(TD-31). 가중치 합으로 나누어 쓴다.
+    public float eventChance, rescueWeight, supplyWeight, encounterWeight;
+}
+
+// 탐사 사건의 공통 수치. 사건은 소요 시간의 triggerMinFraction~triggerMaxFraction 사이에 도착하고,
+// timeoutSeconds 뒤 '임무 계속'으로 끝난다. 철수하면 남은 시간이 withdrawSeconds 이하가 된다(TD-34).
+[Serializable]
+public sealed class ExpeditionEventData
+{
+    public float triggerMinFraction, triggerMaxFraction;
+    public float timeoutSeconds;
+    public float withdrawSeconds;
+    public RescueEventData rescue;
+    public SupplyEventData supply;
+    public EncounterEventData encounter;
+}
+
+// 성공률 = chanceBase + chancePerExploration × 파티 실효 탐사 합, 상한 chanceMax. 실패하면 1명이 최대 HP × failureDamageFraction 피해(TD-30).
+[Serializable]
+public sealed class RescueEventData
+{
+    public float extraSeconds;
+    public float chanceBase, chancePerExploration, chanceMax;
+    public float failureDamageFraction;
+}
+
+// 추가 보상 = 기본 보상 × bonusRewardFraction(올림). damageChance 확률로 1명이 최대 HP × damageFraction 피해(TD-32).
+[Serializable]
+public sealed class SupplyEventData
+{
+    public float extraSeconds;
+    public float bonusRewardFraction;
+    public float damageChance, damageFraction;
+}
+
+// 피해 비율 = damageMaxFraction - damageReductionPerCombat × 파티 실효 전투 합, 하한 damageMinFraction(TD-33).
+[Serializable]
+public sealed class EncounterEventData
+{
+    public float delaySeconds;
+    public float damageMinFraction, damageMaxFraction, damageReductionPerCombat;
 }
 
 // 해금(확장) 효과 한 항목. id로 찾고 nextUpgrade로 다음 해금을 잇는다.

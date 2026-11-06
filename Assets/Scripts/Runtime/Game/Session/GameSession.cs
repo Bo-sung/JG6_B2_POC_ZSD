@@ -45,6 +45,14 @@ public sealed class GameSession : MonoBehaviour
     const string STREAM_EXPEDITION = "expedition";
     const string STREAM_WAVE = "wave";
     const string STREAM_RECRUIT = "recruit";
+    const string STREAM_EXPEDITION_EVENT = "expedition_event";
+    // ExpeditionEventDecision의 값. 기준서 7.4 로그의 decision이다.
+    public const string DECISION_RESCUE = "rescue";
+    public const string DECISION_SEARCH = "search";
+    public const string DECISION_CONTINUE = "continue";
+    public const string DECISION_WITHDRAW = "withdraw";
+    public const string DECISION_TIMEOUT = "timeout";
+    public const string DECISION_FORCED = "forced";
 
     [SerializeField] CoreFacility core;
     [SerializeField] ProductionFacility production;
@@ -227,7 +235,7 @@ public sealed class GameSession : MonoBehaviour
         economy = new ResourceEconomy(table.session.startScrap, table.production.scrapPerSecondPerWork);
         treatment = new TreatmentSystem(table.treatment);
         board = new AssignmentBoard(table.production.maxWorkers, treatment.Involves);
-        expeditions = new ExpeditionSystem(table.expeditions, rng.For(STREAM_EXPEDITION));
+        expeditions = new ExpeditionSystem(table.expeditions, rng.For(STREAM_EXPEDITION), table.expeditionEvents, rng.For(STREAM_EXPEDITION_EVENT));
         recruitment = new RecruitmentSystem(table.recruitment, rng.For(STREAM_RECRUIT));
         core.Initialize(table.core.maxHp);
         BindProduction();
@@ -278,25 +286,29 @@ public sealed class GameSession : MonoBehaviour
 
     void Update()
     {
+        TickSession(Time.deltaTime);
+    }
+
+    void TickSession(float _deltaTime)
+    {
         destroyedThisWave += buildings.RemoveAll(_building => !_building || _building.Hp <= 0);
         if (flow.Phase == SessionPhase.Ended || CheckDefeat())
         {
             return;
         }
-        float deltaTime = Time.deltaTime;
         if (SessionFlow.RunsExpeditions(flow.Phase))
         {
-            TickExpeditions(deltaTime);
+            TickExpeditions(_deltaTime);
         }
         if (SessionFlow.ProducesScrap(flow.Phase))
         {
-            economy.TickProduction(deltaTime, ActiveWork());
+            economy.TickProduction(_deltaTime, ActiveWork());
         }
         if (flow.Phase == SessionPhase.Prep)
         {
-            TickTreatment(deltaTime);
+            TickTreatment(_deltaTime);
         }
-        bool expired = flow.Tick(deltaTime);
+        bool expired = flow.Tick(_deltaTime);
         switch (flow.Phase)
         {
             case SessionPhase.Prep:
@@ -787,7 +799,7 @@ public sealed class GameSession : MonoBehaviour
             production.Release(_ids[index]);
             FindUnit(_ids[index]).BeginAway();
         }
-        GameEvents.RaiseExpeditionStarted(_regionId, party);
+        GameEvents.RaiseExpeditionStarted(_regionId, party, expeditions.Active[expeditions.Active.Count - 1].expeditionId);
         return true;
     }
 
@@ -804,30 +816,272 @@ public sealed class GameSession : MonoBehaviour
 
     void TickExpeditions(float _deltaTime)
     {
-        foreach (ExpeditionOutcome rolled in expeditions.Tick(_deltaTime))
+        List<ActiveExpedition> arrived = expeditions.Advance(_deltaTime);
+        ReplaceRescuesWithoutCandidates();
+        foreach (ActiveExpedition expedition in arrived)
         {
-            var returned = new List<string>();
-            foreach (string id in rolled.returned)
+            GameEvents.RaiseExpeditionEventRaised(expedition.expeditionId, expedition.Event.Type.ToString().ToLowerInvariant());
+            if (expedition.Event.Type == ExpeditionEventType.Encounter)
             {
-                if (FindUnit(id).State.IsAlive)
-                {
-                    returned.Add(id);
-                }
+                ResolveEncounter(expedition);
             }
-            var outcome = new ExpeditionOutcome(rolled.regionId, returned.Count > 0 ? rolled.reward : 0, rolled.casualties, returned.ToArray());
-            expeditionHistory.Add(outcome);
-            expeditionsThisWave.Add(outcome);
-            economy.Add(outcome.reward);
-            foreach (string id in outcome.casualties)
+        }
+        foreach (ActiveExpedition expedition in expeditions.ExpiredEvents())
+        {
+            // 권위 경로 하나로 끝내므로 미응답도 로그와 정산이 같다.
+            TryResolveExpeditionEvent(expedition.expeditionId, ExpeditionDecision.Timeout, out _);
+        }
+        SettleFinishedExpeditions();
+    }
+
+    bool IsSurvivorAlive(string _id) => FindUnit(_id).State.IsAlive;
+
+    // 시간이 끝났거나 전멸한 탐사를 정산한다. 전멸 탐사는 사건 해결 직후에도 여기로 온다(V2-IMPL-13).
+    void SettleFinishedExpeditions()
+    {
+        foreach (ExpeditionOutcome rolled in expeditions.CollectFinished(IsSurvivorAlive))
+        {
+            economy.Add(rolled.reward);
+            foreach (string id in rolled.casualties)
             {
                 FindUnit(id).Kill(CAUSE_EXPEDITION);
             }
-            foreach (string id in outcome.returned)
+            foreach (string id in rolled.returned)
             {
                 ReturnFromExpedition(id);
             }
-            GameEvents.RaiseExpeditionResolved(outcome.regionId, outcome.reward, outcome.casualties, outcome.returned);
+            // 구조 인력은 살아 돌아온 사람이 있을 때만 합류한다. 전멸이면 예약을 풀고 그 사람은 잃는다(기준서 4.1B).
+            SurvivorState rescued = null;
+            if (rolled.rescued != null)
+            {
+                recruitment.ReleaseSlot();
+                if (rolled.returned.Length > 0)
+                {
+                    rescued = JoinSurvivor(rolled.rescued, RecruitmentSystem.SOURCE_RESCUE);
+                }
+            }
+            var outcome = new ExpeditionOutcome(rolled.regionId, rolled.reward, rolled.casualties, rolled.returned, rolled.expeditionId, rolled.withdrawn, rescued != null ? rolled.rescued : null);
+            expeditionHistory.Add(outcome);
+            expeditionsThisWave.Add(outcome);
+            GameEvents.RaiseExpeditionResolved(outcome.regionId, outcome.reward, outcome.casualties, outcome.returned, outcome.expeditionId, outcome.withdrawn, rescued != null ? rescued.Id : null);
         }
+    }
+
+    // ── 탐사 사건 ──
+    // 후보가 바닥나면 생존자 발견을 추가 보급품으로 대체한다(지시서 규칙).
+    void ReplaceRescuesWithoutCandidates()
+    {
+        if (recruitment.RescueShareCount == 0)
+        {
+            expeditions.ReplacePendingRescues();
+        }
+    }
+
+    // 사건 대응의 유일한 권위 경로. 패널 버튼과 미응답 타이머가 모두 여기로 온다.
+    // 같은 결정이 두 번 와도 한 번만 정산하고 두 번째는 false다(기준서 7.2 항목 6). 거부되면 사건은 그대로 대기한다.
+    public bool TryResolveExpeditionEvent(int _expeditionId, ExpeditionDecision _decision, out string _error)
+    {
+        ActiveExpedition expedition = expeditions.Find(_expeditionId);
+        ExpeditionEvent current = expedition != null ? expedition.Event : null;
+        if (current == null || !current.IsAwaitingDecision)
+        {
+            _error = "이미 끝난 사건입니다.";
+            return false;
+        }
+        if (!SessionFlow.RunsExpeditions(flow.Phase))
+        {
+            _error = "결과 단계에서는 사건에 대응할 수 없습니다.";
+            return false;
+        }
+        // 강제 조우 뒤에는 사건이 이미 해결됐고 철수 기회만 남아 있다(TD-34).
+        if (current.IsWithdrawOffered)
+        {
+            if (_decision == ExpeditionDecision.Act)
+            {
+                _error = "강제 조우 뒤에는 임무 계속 또는 철수만 고를 수 있습니다.";
+                return false;
+            }
+            current.IsWithdrawOffered = false;
+            GameEvents.RaiseExpeditionEventDecided(_expeditionId, DecisionLabel(current, _decision));
+            if (_decision == ExpeditionDecision.Withdraw)
+            {
+                expeditions.Withdraw(expedition);
+            }
+            _error = null;
+            return true;
+        }
+        if (_decision == ExpeditionDecision.Act && current.Type == ExpeditionEventType.Rescue && !CheckRescueStart(current, out _error))
+        {
+            return false;
+        }
+        // 검사를 모두 지난 뒤에만 상태를 바꾼다. 여기서부터 이 사건은 해결이다.
+        current.State = ExpeditionEventState.Resolved;
+        GameEvents.RaiseExpeditionEventDecided(_expeditionId, DecisionLabel(current, _decision));
+        switch (_decision)
+        {
+            case ExpeditionDecision.Act:
+                if (current.Type == ExpeditionEventType.Rescue)
+                {
+                    AttemptRescue(expedition);
+                }
+                else
+                {
+                    ExtraSearch(expedition);
+                }
+                break;
+            case ExpeditionDecision.Withdraw:
+                expeditions.Withdraw(expedition);
+                current.Outcome = ExpeditionEvent.OUTCOME_WITHDRAWN;
+                break;
+            default:
+                current.Outcome = ExpeditionEvent.OUTCOME_CONTINUED;
+                break;
+        }
+        GameEvents.RaiseExpeditionEventResolved(_expeditionId, current.Outcome);
+        SettleFinishedExpeditions();
+        _error = null;
+        return true;
+    }
+
+    static string DecisionLabel(ExpeditionEvent _event, ExpeditionDecision _decision) => _decision switch
+    {
+        ExpeditionDecision.Act => _event.Type == ExpeditionEventType.Rescue ? DECISION_RESCUE : DECISION_SEARCH,
+        ExpeditionDecision.Withdraw => DECISION_WITHDRAW,
+        ExpeditionDecision.Timeout => DECISION_TIMEOUT,
+        _ => DECISION_CONTINUE,
+    };
+
+    // 구조를 시작할 수 있는지 본다. 아무것도 소비하지 않는다. 정원이 차면 시작할 수 없고 사건은 남는다(기준서 4.1B).
+    bool CheckRescueStart(ExpeditionEvent _event, out string _error)
+    {
+        if (recruitment.RescueShareCount == 0)
+        {
+            _event.Type = ExpeditionEventType.Supply;
+            _error = "구조할 수 있는 사람이 없어 추가 보급품 수색으로 바뀌었습니다.";
+            return false;
+        }
+        if (!recruitment.HasCapacity(AliveCount))
+        {
+            _error = "수용 정원이 찼습니다. 다른 대응을 고르세요.";
+            GameEvents.RaiseRecruitmentRejected(RecruitmentSystem.REASON_FULL);
+            return false;
+        }
+        _error = null;
+        return true;
+    }
+
+    // 판정은 고른 순간 끝난다. 성공하면 자리와 후보를 바로 확보하고 합류는 귀환 정산에서 한다(V2-IMPL-11).
+    void AttemptRescue(ActiveExpedition _expedition)
+    {
+        ExpeditionEventData data = table.expeditionEvents;
+        ExpeditionEvent current = _expedition.Event;
+        AddEventTime(_expedition, data.rescue.extraSeconds);
+        if (current.OutcomeRoll < ExpeditionEventRules.RescueChance(data, PartyExploration(LivingParty(_expedition))))
+        {
+            recruitment.ReserveSlot(AliveCount);
+            _expedition.RescuedCandidate = recruitment.TakeRescueCandidate();
+            current.Outcome = ExpeditionEvent.OUTCOME_RESCUE_SUCCESS;
+            ReplaceRescuesWithoutCandidates();
+            return;
+        }
+        current.Outcome = ExpeditionEvent.OUTCOME_RESCUE_FAILED;
+        HurtPartyMember(_expedition, ExpeditionEventRules.RescueFailureFraction(data));
+    }
+
+    void ExtraSearch(ActiveExpedition _expedition)
+    {
+        ExpeditionEventData data = table.expeditionEvents;
+        ExpeditionEvent current = _expedition.Event;
+        AddEventTime(_expedition, data.supply.extraSeconds);
+        _expedition.BonusReward = ExpeditionEventRules.SearchBonus(data, expeditions.BaseRewardOf(_expedition, IsSurvivorAlive));
+        if (current.OutcomeRoll < ExpeditionEventRules.SearchDamageChance(data))
+        {
+            current.Outcome = ExpeditionEvent.OUTCOME_SEARCH_HURT;
+            HurtPartyMember(_expedition, ExpeditionEventRules.SearchDamageFraction(data));
+        }
+        else
+        {
+            current.Outcome = ExpeditionEvent.OUTCOME_SEARCH_SAFE;
+        }
+    }
+
+    // 강제 조우는 도착 순간 자동으로 끝난다. 피해와 지연을 적용하고, 전멸이 아니면 철수 기회를 연다(TD-33, TD-34).
+    void ResolveEncounter(ActiveExpedition _expedition)
+    {
+        ExpeditionEventData data = table.expeditionEvents;
+        ExpeditionEvent current = _expedition.Event;
+        current.State = ExpeditionEventState.Resolved;
+        current.Outcome = ExpeditionEvent.OUTCOME_ENCOUNTER;
+        GameEvents.RaiseExpeditionEventDecided(_expedition.expeditionId, DECISION_FORCED);
+        AddEventTime(_expedition, data.encounter.delaySeconds);
+        HurtPartyMember(_expedition, ExpeditionEventRules.EncounterDamageFraction(data, PartyCombat(LivingParty(_expedition))));
+        GameEvents.RaiseExpeditionEventResolved(_expedition.expeditionId, current.Outcome);
+        // 전멸이면 철수 기회 없이 이번 틱 끝에 정산된다.
+        if (LivingParty(_expedition).Count > 0)
+        {
+            current.IsWithdrawOffered = true;
+            current.TimeoutRemaining = data.timeoutSeconds;
+        }
+    }
+
+    void AddEventTime(ActiveExpedition _expedition, float _seconds)
+    {
+        _expedition.remainingSeconds += _seconds;
+        _expedition.Event.AddedSeconds = _seconds;
+    }
+
+    // 살아 있는 파티원 1명이 최대 HP × 비율의 피해를 입는다. 피해·사망은 SurvivorUnit의 기존 단일 경로로만 낸다(V2-IMPL-13).
+    void HurtPartyMember(ActiveExpedition _expedition, float _fraction)
+    {
+        List<string> living = LivingParty(_expedition);
+        if (living.Count == 0)
+        {
+            return;
+        }
+        string victimId = living[ExpeditionEventRules.PickVictim(_expedition.Event.VictimRoll, living.Count)];
+        SurvivorUnit victim = FindUnit(victimId);
+        float amount = victim.State.MaxHp * _fraction;
+        _expedition.Event.VictimId = victimId;
+        _expedition.Event.Damage = amount;
+        victim.ApplyDamage(amount, CAUSE_EXPEDITION);
+    }
+
+    public List<string> LivingParty(ActiveExpedition _expedition)
+    {
+        var living = new List<string>();
+        foreach (string id in _expedition.party)
+        {
+            if (IsSurvivorAlive(id))
+            {
+                living.Add(id);
+            }
+        }
+        return living;
+    }
+
+    // 파티 실효 전투 합. 인원별 실효값을 더한다(V2-IMPL-07).
+    public float PartyCombat(IReadOnlyList<string> _ids)
+    {
+        float total = 0;
+        foreach (string id in _ids)
+        {
+            SurvivorState state = FindUnit(id).State;
+            total += state.Combat * state.CombatEfficiency;
+        }
+        return total;
+    }
+
+    // 패널 표시와 실제 정산이 같은 값을 쓴다.
+    public int BaseRewardOf(ActiveExpedition _expedition) => expeditions.BaseRewardOf(_expedition, IsSurvivorAlive);
+
+    public float ReturnDeathChanceOf(ActiveExpedition _expedition) => expeditions.DeathChanceOf(_expedition, IsSurvivorAlive, LivingParty(_expedition).Count);
+
+    public int SearchBonusOf(ActiveExpedition _expedition) => ExpeditionEventRules.SearchBonus(table.expeditionEvents, BaseRewardOf(_expedition));
+
+    // 지금 구조를 시도할 때의 성공률. 패널 표시와 실제 판정이 같은 값을 쓴다.
+    public float RescueChanceOf(ActiveExpedition _expedition)
+    {
+        return ExpeditionEventRules.RescueChance(table.expeditionEvents, PartyExploration(LivingParty(_expedition)));
     }
 
     public float ExpeditionRemaining(string _id)
@@ -869,8 +1123,9 @@ public sealed class GameSession : MonoBehaviour
 
     public string DescribeExpedition(ExpeditionOutcome _outcome)
     {
-        string reward = _outcome.returned.Length == 0 ? "귀환자 없음" : _outcome.reward > 0 ? $"스크랩 +{_outcome.reward}" : "빈손 귀환";
-        return $"{RegionName(_outcome.regionId)} · {reward}\n귀환: {SurvivorNames(_outcome.returned)} / 사망: {SurvivorNames(_outcome.casualties)}";
+        string reward = _outcome.returned.Length == 0 ? "귀환자 없음" : _outcome.withdrawn ? "철수 귀환" : _outcome.reward > 0 ? $"스크랩 +{_outcome.reward}" : "빈손 귀환";
+        string rescued = _outcome.rescued != null ? $" · 구조 합류: {_outcome.rescued.displayName}" : string.Empty;
+        return $"{RegionName(_outcome.regionId)} · {reward}{rescued}\n귀환: {SurvivorNames(_outcome.returned)} / 사망: {SurvivorNames(_outcome.casualties)}";
     }
 
     void ReturnFromExpedition(string _id)
@@ -1396,6 +1651,22 @@ public sealed class GameSession : MonoBehaviour
         JoinSurvivor(candidate, CAUSE_DEBUG);
         _error = null;
         return true;
+    }
+
+    // 디버그 전용: 진행 중인 첫 탐사에 지정한 사건을 일으킨다. 다음 틱에 정규 경로로 도착한다.
+    // _outcomeRoll은 0~1 값이고 구조·수색의 성패를 정한다. 음수면 파견 때 뽑아 둔 값을 쓴다.
+    public bool DebugRaiseExpeditionEvent(ExpeditionEventType _type, out string _error, double _outcomeRoll = -1)
+    {
+        foreach (ActiveExpedition expedition in expeditions.Active)
+        {
+            if (expeditions.ForceEvent(expedition, _type, _outcomeRoll))
+            {
+                _error = null;
+                return true;
+            }
+        }
+        _error = "사건을 일으킬 탐사가 없습니다.";
+        return false;
     }
 
     public void DebugRestartWave()

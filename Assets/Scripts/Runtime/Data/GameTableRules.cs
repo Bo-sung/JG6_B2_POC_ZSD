@@ -370,7 +370,38 @@ public sealed class GameTableRules
             Nonnegative(region.rewardPerExploration, path + ".rewardPerExploration");
             Fraction(region.rewardChanceBase, path + ".rewardChanceBase");
             Fraction(region.deathChanceBase, path + ".deathChanceBase");
+            Fraction(region.eventChance, path + ".eventChance");
+            Nonnegative(region.rescueWeight, path + ".rescueWeight");
+            Nonnegative(region.supplyWeight, path + ".supplyWeight");
+            Nonnegative(region.encounterWeight, path + ".encounterWeight");
+            Check(region.eventChance <= 0 || region.rescueWeight + region.supplyWeight + region.encounterWeight > 0, path, "사건이 발생하는 지역은 유형 가중치 합이 0보다 커야 합니다.");
         }
+        ValidateExpeditionEvents(_gameplay.expeditionEvents);
+    }
+
+    void ValidateExpeditionEvents(ExpeditionEventData _events)
+    {
+        if (_events == null || _events.rescue == null || _events.supply == null || _events.encounter == null)
+        {
+            Check(false, "Gameplay.expeditionEvents", "rescue, supply, encounter 설정이 필요합니다.");
+            return;
+        }
+        const string PATH = "Gameplay.expeditionEvents";
+        Check(_events.triggerMinFraction >= 0 && _events.triggerMinFraction <= _events.triggerMaxFraction && _events.triggerMaxFraction <= 1, PATH + ".triggerMinFraction", "0 <= triggerMinFraction <= triggerMaxFraction <= 1 이어야 합니다.");
+        Positive(_events.timeoutSeconds, PATH + ".timeoutSeconds");
+        Positive(_events.withdrawSeconds, PATH + ".withdrawSeconds");
+        Nonnegative(_events.rescue.extraSeconds, PATH + ".rescue.extraSeconds");
+        Fraction(_events.rescue.chanceBase, PATH + ".rescue.chanceBase");
+        Nonnegative(_events.rescue.chancePerExploration, PATH + ".rescue.chancePerExploration");
+        Fraction(_events.rescue.chanceMax, PATH + ".rescue.chanceMax");
+        Fraction(_events.rescue.failureDamageFraction, PATH + ".rescue.failureDamageFraction");
+        Nonnegative(_events.supply.extraSeconds, PATH + ".supply.extraSeconds");
+        Nonnegative(_events.supply.bonusRewardFraction, PATH + ".supply.bonusRewardFraction");
+        Fraction(_events.supply.damageChance, PATH + ".supply.damageChance");
+        Fraction(_events.supply.damageFraction, PATH + ".supply.damageFraction");
+        Nonnegative(_events.encounter.delaySeconds, PATH + ".encounter.delaySeconds");
+        Check(_events.encounter.damageMinFraction >= 0 && _events.encounter.damageMinFraction <= _events.encounter.damageMaxFraction && _events.encounter.damageMaxFraction <= 1, PATH + ".encounter.damageMinFraction", "0 <= damageMinFraction <= damageMaxFraction <= 1 이어야 합니다.");
+        Nonnegative(_events.encounter.damageReductionPerCombat, PATH + ".encounter.damageReductionPerCombat");
     }
 
     void ValidateUpgrades(TableManager _tables)
