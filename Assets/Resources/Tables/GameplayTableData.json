@@ -51,6 +51,18 @@
       { "id": "c8", "displayName": "이안", "combat": 2, "work": 3, "exploration": 2, "maxHp": 90, "trait": "" }
     ]
   },
+  "injury": {
+    "normalMinHpFraction": 0.7,
+    "lightMinHpFraction": 0.3,
+    "lightEfficiency": 0.75
+  },
+  "treatment": {
+    "cost": 2,
+    "healFraction": 0.4,
+    "baseSeconds": 20,
+    "referenceWork": 3,
+    "speedPerWork": 0.15
+  },
   "buildings": {
     "gridSize": 2,
     "wall": { "cost": 4, "maxHp": 120 },

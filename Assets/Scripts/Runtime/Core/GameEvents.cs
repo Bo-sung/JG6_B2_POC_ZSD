@@ -198,6 +198,73 @@ public static class GameEvents
         }
     }
 
+    public readonly struct SurvivorInjuredInfo
+    {
+        public readonly string id, status;
+        public readonly float hp;
+        public SurvivorInjuredInfo(string _id, float _hp, string _status)
+        {
+            id = _id;
+            hp = _hp;
+            status = _status;
+        }
+    }
+    public readonly struct TreatmentStartedInfo
+    {
+        public readonly string patientId, workerId;
+        public readonly int cost;
+        public TreatmentStartedInfo(string _patientId, string _workerId, int _cost)
+        {
+            patientId = _patientId;
+            workerId = _workerId;
+            cost = _cost;
+        }
+    }
+    public readonly struct TreatmentPausedInfo
+    {
+        public readonly string patientId;
+        public TreatmentPausedInfo(string _patientId)
+        {
+            patientId = _patientId;
+        }
+    }
+    public readonly struct TreatmentResumedInfo
+    {
+        public readonly string patientId, workerId;
+        public TreatmentResumedInfo(string _patientId, string _workerId)
+        {
+            patientId = _patientId;
+            workerId = _workerId;
+        }
+    }
+    public readonly struct TreatmentCompletedInfo
+    {
+        public readonly string patientId;
+        public readonly float hp;
+        public TreatmentCompletedInfo(string _patientId, float _hp)
+        {
+            patientId = _patientId;
+            hp = _hp;
+        }
+    }
+    public readonly struct TreatmentCancelledInfo
+    {
+        public readonly string patientId, reason;
+        public TreatmentCancelledInfo(string _patientId, string _reason)
+        {
+            patientId = _patientId;
+            reason = _reason;
+        }
+    }
+    public readonly struct TreatmentRejectedInfo
+    {
+        public readonly string reason;
+        public TreatmentRejectedInfo(string _reason)
+        {
+            reason = _reason;
+        }
+    }
+
     // ── POC 이벤트 ──
     public static event Action<SessionStartInfo> SessionStarted;
     public static event Action<SessionEndInfo> SessionEnded;
@@ -213,6 +280,13 @@ public static class GameEvents
     public static event Action<RecruitmentAcceptedInfo> RecruitmentAccepted;
     public static event Action<RecruitmentRejectedInfo> RecruitmentRejected;
     public static event Action<SurvivorJoinedInfo> SurvivorJoined;
+    public static event Action<SurvivorInjuredInfo> SurvivorInjured;
+    public static event Action<TreatmentStartedInfo> TreatmentStarted;
+    public static event Action<TreatmentPausedInfo> TreatmentPaused;
+    public static event Action<TreatmentResumedInfo> TreatmentResumed;
+    public static event Action<TreatmentCompletedInfo> TreatmentCompleted;
+    public static event Action<TreatmentCancelledInfo> TreatmentCancelled;
+    public static event Action<TreatmentRejectedInfo> TreatmentRejected;
 
     public static void RaiseSessionStarted(int _seed) => Emit(SessionStarted, new SessionStartInfo(_seed));
     public static void RaiseSessionEnded(SessionResult _result, string _reason) => Emit(SessionEnded, new SessionEndInfo(_result, _reason));
@@ -228,6 +302,13 @@ public static class GameEvents
     public static void RaiseRecruitmentAccepted(string _candidateId, int _cost, int _aliveCount) => Emit(RecruitmentAccepted, new RecruitmentAcceptedInfo(_candidateId, _cost, _aliveCount));
     public static void RaiseRecruitmentRejected(string _reason) => Emit(RecruitmentRejected, new RecruitmentRejectedInfo(_reason));
     public static void RaiseSurvivorJoined(string _newId, string _source) => Emit(SurvivorJoined, new SurvivorJoinedInfo(_newId, _source));
+    public static void RaiseSurvivorInjured(string _id, float _hp, string _status) => Emit(SurvivorInjured, new SurvivorInjuredInfo(_id, _hp, _status));
+    public static void RaiseTreatmentStarted(string _patientId, string _workerId, int _cost) => Emit(TreatmentStarted, new TreatmentStartedInfo(_patientId, _workerId, _cost));
+    public static void RaiseTreatmentPaused(string _patientId) => Emit(TreatmentPaused, new TreatmentPausedInfo(_patientId));
+    public static void RaiseTreatmentResumed(string _patientId, string _workerId) => Emit(TreatmentResumed, new TreatmentResumedInfo(_patientId, _workerId));
+    public static void RaiseTreatmentCompleted(string _patientId, float _hp) => Emit(TreatmentCompleted, new TreatmentCompletedInfo(_patientId, _hp));
+    public static void RaiseTreatmentCancelled(string _patientId, string _reason) => Emit(TreatmentCancelled, new TreatmentCancelledInfo(_patientId, _reason));
+    public static void RaiseTreatmentRejected(string _reason) => Emit(TreatmentRejected, new TreatmentRejectedInfo(_reason));
 
     // ── 이벤트 ──
     public static event Action<RunInfo> RunStarted;
@@ -299,6 +380,13 @@ public static class GameEvents
         RecruitmentAccepted = null;
         RecruitmentRejected = null;
         SurvivorJoined = null;
+        SurvivorInjured = null;
+        TreatmentStarted = null;
+        TreatmentPaused = null;
+        TreatmentResumed = null;
+        TreatmentCompleted = null;
+        TreatmentCancelled = null;
+        TreatmentRejected = null;
         SEQUENCE = 0;
         SceneManager.sceneLoaded -= OnSceneLoaded;
         HOOKED = false;

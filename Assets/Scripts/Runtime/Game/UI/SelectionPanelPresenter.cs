@@ -3,6 +3,7 @@ using System.Text;
 using UnityEngine;
 
 // 선택 패널. 작업 배정과 방어 위치를 별도 버튼으로 바꾼다. 여러 명이면 선택 인원 전체에 적용한다.
+// 중상자도 내용을 볼 수 있지만 명령 버튼은 동작하지 않고, 권위 경로도 거부한다.
 public sealed class SelectionPanelPresenter
 {
     readonly SelectionPanelView view;
@@ -55,7 +56,12 @@ public sealed class SelectionPanelPresenter
         {
             ShowMultiple(ids, shown);
         }
-        view.SetInteractable(session.CanChangeWork, session.CanChangeDefense, session.CanCommand);
+        bool actable = false;
+        foreach (string id in ids)
+        {
+            actable |= session.FindUnit(id).State.CanAct;
+        }
+        view.SetInteractable(session.CanChangeWork && actable, session.CanChangeDefense && actable, session.CanCommand && actable);
     }
 
     string DefaultHint() => session.Phase == SessionPhase.Prep
@@ -66,13 +72,16 @@ public sealed class SelectionPanelPresenter
     void ShowSingle(SurvivorUnit _unit, string _message)
     {
         SurvivorState state = _unit.State;
+        bool treating = session.IsTreating(state.Id);
         view.Show(
-            $"{state.DisplayName} · {SurvivorLabels.Specialty(state.Specialty)}  HP {Mathf.CeilToInt(state.Hp)}/{Mathf.CeilToInt(state.MaxHp)}",
+            $"{state.DisplayName} · {SurvivorLabels.Specialty(state.Specialty)}  HP {Mathf.CeilToInt(state.Hp)}/{Mathf.CeilToInt(state.MaxHp)} · {SurvivorLabels.Condition(state, treating)}",
             $"전투 {state.Combat}   작업 {state.Work}   탐사 {state.Exploration}\n사거리 {_unit.AttackRange:0.0}m · 초당 피해 {_unit.DamagePerSecond:0.#}",
             $"작업 배정: {SurvivorLabels.Work(session.Assignments.WorkOf(state.Id))}",
             $"방어 배정: {SurvivorLabels.Defense(session.Assignments.DefenseOf(state.Id), session.Assignments.IsDefenseAssigned(state.Id))}",
             $"현재 행동: {SurvivorLabels.Action(_unit)}",
-            _message);
+            state.IsCritical ? "명령 불가 · 중상은 작업·탐사·방어를 할 수 없습니다. 치료소에서 경상 이상이 되면 다시 명령할 수 있습니다."
+            : treating ? "치료 중 · 생산과 파견에 쓸 수 없습니다. 경보가 울리면 방어 위치로 이동합니다.\n" + _message
+            : _message);
     }
 
     void ShowMultiple(IReadOnlyList<string> _ids, string _message)

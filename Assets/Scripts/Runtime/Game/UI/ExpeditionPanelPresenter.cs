@@ -34,7 +34,7 @@ public sealed class ExpeditionPanelPresenter
             return;
         }
         string id = session.Units[_index].State.Id;
-        if (!session.FindUnit(id).State.CanAct)
+        if (!CanSelect(session.FindUnit(id).State))
         {
             return;
         }
@@ -59,11 +59,31 @@ public sealed class ExpeditionPanelPresenter
         }
     }
 
+    // 중상과 치료 중인 인원은 고를 수 없다. 사유는 행에 표시하고 판정은 TryStartExpedition이 한다.
+    bool CanSelect(SurvivorState _state) => _state.CanAct && !session.Treatment.Involves(_state.Id);
+
+    string DutyOf(SurvivorState _state)
+    {
+        if (!_state.IsAlive)
+        {
+            return "사망";
+        }
+        if (_state.IsAway)
+        {
+            return $"탐사 {Mathf.CeilToInt(session.ExpeditionRemaining(_state.Id))}초";
+        }
+        if (_state.IsCritical)
+        {
+            return "중상 · 파견 불가";
+        }
+        return session.Treatment.Involves(_state.Id) ? "치료 중 · 취소 후 파견" : SurvivorLabels.Work(session.Assignments.WorkOf(_state.Id));
+    }
+
     public void Refresh()
     {
-        selected.RemoveAll(_id => !session.FindUnit(_id).State.CanAct);
+        selected.RemoveAll(_id => !CanSelect(session.FindUnit(_id).State));
         ExpeditionRegionData region = regions[regionIndex];
-        int exploration = 0;
+        int exploration = session.PartyExploration(selected);
         for (int index = 0; index < view.MemberCount; index++)
         {
             // 합류로 인원이 늘어도 9행 안에서 표시된다. 빈 행은 숨긴다.
@@ -75,12 +95,8 @@ public sealed class ExpeditionPanelPresenter
             view.SetMemberVisible(index, true);
             SurvivorState state = session.Units[index].State;
             bool chosen = selected.Contains(state.Id);
-            if (chosen)
-            {
-                exploration += state.Exploration;
-            }
-            string duty = !state.IsAlive ? "사망" : state.IsAway ? $"탐사 {Mathf.CeilToInt(session.ExpeditionRemaining(state.Id))}초" : SurvivorLabels.Work(session.Assignments.WorkOf(state.Id));
-            view.ShowMember(index, $"{(chosen ? "[선택]" : "[  ]")} {state.DisplayName}{(state.IsNewJoin ? " · 신규" : "")} · 탐사 {state.Exploration} · {duty}", state.CanAct);
+            string stat = state.Injury == InjuryStatus.Light && !state.IsAway ? $"탐사 {state.Exploration}→{state.EffectiveExploration:0.##}(경상)" : $"탐사 {state.Exploration}";
+            view.ShowMember(index, $"{(chosen ? "[선택]" : "[  ]")} {state.DisplayName}{(state.IsNewJoin ? " · 신규" : "")} · {stat} · {DutyOf(state)}", CanSelect(state));
         }
         float rewardChance = session.Expeditions.RewardChance(region.id, exploration);
         if (selected.Count == 1)

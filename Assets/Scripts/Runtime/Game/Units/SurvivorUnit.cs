@@ -39,7 +39,10 @@ public sealed class SurvivorUnit : MonoBehaviour
     [SerializeField] float stationRetrySeconds = 1f;
     [SerializeField] float stationBlockedSeconds = 3f;
     [SerializeField] float stationProgressTolerance = 0.05f;
+    // 중상으로 쓰러진 몸체의 표시 기울기(도). 표시용이며 판정에 쓰지 않는다.
+    [SerializeField] float fallenTilt = 80f;
     bool selected;
+    bool isDown;
     Vector3 lastProgressPosition;
     float lastProgressTime;
     float nextStationRetry;
@@ -71,7 +74,8 @@ public sealed class SurvivorUnit : MonoBehaviour
     }
 
     public SurvivorState State { get; private set; }
-    public bool AtWorkSlot => State.Activity == SurvivorActivity.Working && arrived;
+    public bool AtWorkSlot => State.CanAct && State.Activity == SurvivorActivity.Working && arrived;
+    public bool AtTreatmentSlot => State.CanAct && State.Activity == SurvivorActivity.Treating && arrived;
     public bool HasArrived => arrived;
     public bool IsFiring => autoTarget || manualTarget;
     public EnemyUnit ManualTarget => manualTarget;
@@ -91,8 +95,12 @@ public sealed class SurvivorUnit : MonoBehaviour
     }
 
     public TowerBuilding OccupiedTower => ActiveStation as TowerBuilding;
-    public float DamagePerSecond => (combat.baseDamage + combat.damagePerCombat * State.Combat)
-        * (ActiveStation != null ? ActiveStation.DamageMultiplier : 1) / combat.attackInterval;
+    public float DamagePerSecond => ShotDamage / combat.attackInterval;
+    // 사격 한 발의 피해. 초당 피해 표시와 실제 사격이 같은 값을 쓴다. 부상 효율은 피해에만 곱한다(V2-IMPL-07).
+    float ShotDamage => (combat.baseDamage + combat.damagePerCombat * State.Combat) * State.CombatEfficiency
+        * (ActiveStation != null ? ActiveStation.DamageMultiplier : 1);
+    // 적이 공격할 수 있는 상태. 쓰러진 인력도 포함하며 우선순위는 EnemyUnit이 정한다(V2-IMPL-02).
+    public bool IsTargetable => State.IsAlive && !State.IsAway && !IsProtected;
 
     public void LeaveTower(TowerBuilding _tower)
     {
@@ -121,6 +129,9 @@ public sealed class SurvivorUnit : MonoBehaviour
                 Vector3 target = defenseMarker.transform.position;
                 defenseConnection.SetPosition(1, new Vector3(target.x, rangeHeight, target.z));
             }
+            // 쓰러진 인력도 선택해 볼 수 있지만 사거리와 이동 연결선은 그리지 않는다.
+            currentRange.enabled = selected && State.CanAct;
+            defenseConnection.enabled = selected && State.CanAct;
         }
     }
 
@@ -172,6 +183,10 @@ public sealed class SurvivorUnit : MonoBehaviour
         {
             tracer.enabled = false;
         }
+        if (State != null)
+        {
+            SyncDown();
+        }
         if (State == null || !State.CanAct || halted)
         {
             return;
@@ -179,6 +194,9 @@ public sealed class SurvivorUnit : MonoBehaviour
         switch (State.Activity)
         {
             case SurvivorActivity.Working:
+                UpdateArrival();
+                break;
+            case SurvivorActivity.Treating:
                 UpdateArrival();
                 break;
             case SurvivorActivity.Guarding:
@@ -196,6 +214,17 @@ public sealed class SurvivorUnit : MonoBehaviour
     public void OrderWork(Vector3 _slot)
     {
         if (State.SetActivity(SurvivorActivity.Working))
+        {
+            ClearTargets();
+            station = null;
+            MoveTo(_slot);
+        }
+    }
+
+    // 치료소의 담당자 자리 또는 환자 대기 자리로 간다.
+    public void OrderTreat(Vector3 _slot)
+    {
+        if (State.SetActivity(SurvivorActivity.Treating))
         {
             ClearTargets();
             station = null;
@@ -271,6 +300,16 @@ public sealed class SurvivorUnit : MonoBehaviour
         }
     }
 
+    // 중상자를 치료소 대기 자리로 옮긴다. 동료가 옮겼다고 보고 이동 시간은 없다(V2-IMPL-03).
+    public void PlaceAt(Vector3 _position)
+    {
+        if (!agent.isActiveAndEnabled || !agent.Warp(_position))
+        {
+            transform.position = _position;
+        }
+        arrived = true;
+    }
+
     public void SetSelected(bool _selected)
     {
         selected = _selected;
@@ -293,10 +332,17 @@ public sealed class SurvivorUnit : MonoBehaviour
         {
             return;
         }
+        InjuryStatus before = State.Injury;
         if (State.ApplyDamage(_amount))
         {
             OnDied(_cause);
+            return;
         }
+        if (InjuryRules.IsWorse(before, State.Injury))
+        {
+            GameEvents.RaiseSurvivorInjured(State.Id, State.Hp, State.Injury.ToString());
+        }
+        SyncDown();
     }
 
     public void Kill(string _cause)
@@ -315,6 +361,27 @@ public sealed class SurvivorUnit : MonoBehaviour
         defenseMarker.gameObject.SetActive(false);
         gameObject.SetActive(false);
         GameEvents.RaiseSurvivorDied(State.Id, _cause);
+    }
+
+    // 쓰러짐은 HP에서 파생한다. 그 자리에서 이동·사격을 멈추고 탑에서 내려온다. 탑 자리 배정은 지우지 않는다(V2-IMPL-04).
+    void SyncDown()
+    {
+        bool down = State.IsCritical;
+        if (down == isDown)
+        {
+            return;
+        }
+        isDown = down;
+        if (down)
+        {
+            ClearTargets();
+            station = null;
+            tracer.enabled = false;
+            StopAgent();
+            arrived = true;
+            RefreshTowerVisual();
+        }
+        visualBody.localRotation = down ? Quaternion.Euler(fallenTilt, 0, 0) : Quaternion.identity;
     }
 
     // ── 내부 동작 ──
@@ -509,11 +576,7 @@ public sealed class SurvivorUnit : MonoBehaviour
             return;
         }
         nextFireTime = Time.time + combat.attackInterval;
-        float damage = combat.baseDamage + combat.damagePerCombat * State.Combat;
-        if (ActiveStation != null)
-        {
-            damage *= ActiveStation.DamageMultiplier;
-        }
+        float damage = ShotDamage;
         Vector3 direction = Vector3.ProjectOnPlane(_enemy.transform.position - transform.position, Vector3.up);
         if (direction.sqrMagnitude > 0)
         {

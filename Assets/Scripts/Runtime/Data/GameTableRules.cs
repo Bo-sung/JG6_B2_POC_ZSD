@@ -142,6 +142,7 @@ public sealed class GameTableRules
         ValidateSession(_tables.Gameplay);
         ValidateSurvivors(_tables.Gameplay);
         ValidateRecruitment(_tables.Gameplay);
+        ValidateInjury(_tables.Gameplay);
         ValidateBuildings(_tables.Gameplay.buildings);
         ValidateWaves(_tables.Gameplay);
         ValidateExpeditions(_tables.Gameplay);
@@ -277,6 +278,27 @@ public sealed class GameTableRules
 
     // 초기 인원의 특성도 같은 키 집합으로 검사한다. 효과는 G4에서 붙는다.
     static bool IsKnownTrait(string _trait) => string.IsNullOrEmpty(_trait) || Array.IndexOf(TRAIT_KEYS, _trait) >= 0;
+
+    void ValidateInjury(GameplayTableData _gameplay)
+    {
+        var injury = _gameplay.injury;
+        var treatment = _gameplay.treatment;
+        if (injury == null || treatment == null)
+        {
+            Check(false, "Gameplay", "injury, treatment 설정이 필요합니다.");
+            return;
+        }
+        Check(injury.lightMinHpFraction > 0 && injury.lightMinHpFraction < injury.normalMinHpFraction && injury.normalMinHpFraction <= 1,
+            "Gameplay.injury", "0 < lightMinHpFraction < normalMinHpFraction <= 1 이어야 합니다.");
+        Check(injury.lightEfficiency > 0 && injury.lightEfficiency <= 1, "Gameplay.injury.lightEfficiency", "0 초과 1 이하여야 합니다.");
+        Nonnegative(treatment.cost, "Gameplay.treatment.cost");
+        Check(treatment.healFraction > 0 && treatment.healFraction <= 1, "Gameplay.treatment.healFraction", "0 초과 1 이하여야 합니다.");
+        Positive(treatment.baseSeconds, "Gameplay.treatment.baseSeconds");
+        Positive(treatment.referenceWork, "Gameplay.treatment.referenceWork");
+        Nonnegative(treatment.speedPerWork, "Gameplay.treatment.speedPerWork");
+        // 가장 낮은 작업 능력에서도 속도가 양수여야 치료가 끝난다.
+        Check(1 + treatment.speedPerWork * (STAT_MIN - treatment.referenceWork) > 0, "Gameplay.treatment.speedPerWork", "최저 작업 능력의 치료 속도가 0보다 커야 합니다.");
+    }
 
     void ValidateBuildings(BuildingsData _buildings)
     {

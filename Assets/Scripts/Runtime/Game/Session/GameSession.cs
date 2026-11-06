@@ -48,6 +48,7 @@ public sealed class GameSession : MonoBehaviour
 
     [SerializeField] CoreFacility core;
     [SerializeField] ProductionFacility production;
+    [SerializeField] InfirmaryFacility infirmary;
     [SerializeField] WaveDirector waveDirector;
     // 초기 인원은 씬에 배치하고, 합류 인력은 survivorPrefab을 joinPoint에 Instantiate한다.
     [SerializeField] List<SurvivorUnit> units = new List<SurvivorUnit>();
@@ -72,6 +73,8 @@ public sealed class GameSession : MonoBehaviour
     AssignmentBoard board;
     ExpeditionSystem expeditions;
     RecruitmentSystem recruitment;
+    // Awake가 테이블 값으로 교체한다. 그 전에도 '치료 없음'으로 읽을 수 있게 비어 있는 시스템을 둔다.
+    TreatmentSystem treatment = new TreatmentSystem(null);
     int seed;
     int buildingSequence;
     readonly Dictionary<string, (WorkAssignment work, DefenseAssignment defense)> loggedAssignments = new Dictionary<string, (WorkAssignment, DefenseAssignment)>();
@@ -133,6 +136,9 @@ public sealed class GameSession : MonoBehaviour
     public AssignmentBoard Assignments => board;
     public ExpeditionSystem Expeditions => expeditions;
     public RecruitmentSystem Recruitment => recruitment;
+    public TreatmentSystem Treatment => treatment;
+    // 지금 치료가 진행 중인 인원. 일시정지 중에는 방어 등 다른 행동을 하므로 false다.
+    public bool IsTreating(string _id) => treatment.Involves(_id) && !treatment.Current.IsPaused;
     public ResourceEconomy Economy => economy;
     public IReadOnlyList<SurvivorUnit> Units => units;
     public IReadOnlyList<BuildingBase> Buildings => buildings;
@@ -173,6 +179,19 @@ public sealed class GameSession : MonoBehaviour
         }
     }
 
+    public int CountInjury(InjuryStatus _status)
+    {
+        int count = 0;
+        foreach (SurvivorState survivor in survivors)
+        {
+            if (survivor.Injury == _status)
+            {
+                count++;
+            }
+        }
+        return count;
+    }
+
     public float Speed { get; private set; } = 1;
     public IReadOnlyList<float> SpeedOptions => table.session.speedOptions;
 
@@ -206,11 +225,13 @@ public sealed class GameSession : MonoBehaviour
         var rng = new SessionRng(seed);
         flow = new SessionFlow(table.session.prepSeconds, table.session.alertSeconds, table.session.combatSeconds, table.session.timeoutCoreDamagePerEnemy, table.waves.Length);
         economy = new ResourceEconomy(table.session.startScrap, table.production.scrapPerSecondPerWork);
-        board = new AssignmentBoard(table.production.maxWorkers);
+        treatment = new TreatmentSystem(table.treatment);
+        board = new AssignmentBoard(table.production.maxWorkers, treatment.Involves);
         expeditions = new ExpeditionSystem(table.expeditions, rng.For(STREAM_EXPEDITION));
         recruitment = new RecruitmentSystem(table.recruitment, rng.For(STREAM_RECRUIT));
         core.Initialize(table.core.maxHp);
         BindProduction();
+        BindInfirmary();
         waveDirector.Initialize(this, rng.For(STREAM_WAVE));
         BindSurvivors();
     }
@@ -222,6 +243,16 @@ public sealed class GameSession : MonoBehaviour
             throw new InvalidOperationException("씬의 생산 작업 슬롯 수가 테이블의 maxWorkers보다 적습니다.");
         }
         production.Initialize();
+    }
+
+    // 수용 상한 전원이 중상이어도 대기 자리가 겹치지 않아야 한다(V2-IMPL-03).
+    void BindInfirmary()
+    {
+        if (infirmary.WaitSlotCount < table.recruitment.capacity)
+        {
+            throw new InvalidOperationException("씬의 치료소 대기 자리 수가 테이블의 capacity보다 적습니다.");
+        }
+        infirmary.Initialize();
     }
 
     void OnEnable()
@@ -260,6 +291,10 @@ public sealed class GameSession : MonoBehaviour
         if (SessionFlow.ProducesScrap(flow.Phase))
         {
             economy.TickProduction(deltaTime, ActiveWork());
+        }
+        if (flow.Phase == SessionPhase.Prep)
+        {
+            TickTreatment(deltaTime);
         }
         bool expired = flow.Tick(deltaTime);
         switch (flow.Phase)
@@ -302,7 +337,7 @@ public sealed class GameSession : MonoBehaviour
         }
         for (int index = 0; index < roster.Length; index++)
         {
-            RegisterSurvivor(new SurvivorState(roster[index]), placed[index], defaultDefensePoints[index].position);
+            RegisterSurvivor(new SurvivorState(roster[index], _injury: table.injury), placed[index], defaultDefensePoints[index].position);
         }
         // 첫 준비에서 바로 고민할 수 있도록 작업 능력이 높은 순으로 생산 시설을 채운다. 플레이어가 바꿀 수 있다.
         var byWork = new List<SurvivorState>(survivors);
@@ -326,6 +361,18 @@ public sealed class GameSession : MonoBehaviour
         {
             GameEvents.RaiseVisitorArrived(arrived.Candidate.id, arrived.Wave);
         }
+        // 다른 인원이 생산 자리를 잡기 전에 중상자의 자리를 비우고 치료소로 옮긴다(V2-IMPL-03).
+        foreach (SurvivorUnit unit in units)
+        {
+            if (unit.State.IsCritical && !unit.State.IsAway)
+            {
+                MoveToWard(unit);
+            }
+        }
+        if (treatment.ResumeAtPrep())
+        {
+            GameEvents.RaiseTreatmentResumed(treatment.Current.Patient.Id, treatment.Current.Worker.Id);
+        }
         foreach (SurvivorUnit unit in units)
         {
             if (unit.State.CanAct)
@@ -344,6 +391,11 @@ public sealed class GameSession : MonoBehaviour
         if (expired != null)
         {
             GameEvents.RaiseRecruitmentRejected(RecruitmentSystem.REASON_EXPIRED);
+        }
+        // 치료는 진행률을 보존하고 멈춘다. 담당자와 경상 환자는 아래에서 방어로 가고, 중상 환자는 움직이지 않는다.
+        if (treatment.Pause())
+        {
+            GameEvents.RaiseTreatmentPaused(treatment.Current.Patient.Id);
         }
         foreach (SurvivorUnit unit in units)
         {
@@ -381,10 +433,9 @@ public sealed class GameSession : MonoBehaviour
     void EnterResult(int _timedOutEnemies, float _timeoutDamage)
     {
         flow.Advance();
-        // POC 전용 단순화: 생존 인원은 결과 단계에서 전량 회복한다(DEC-09).
+        // HP와 부상은 웨이브를 넘어 이어진다(DEC-09 오버라이드).
         foreach (SurvivorUnit unit in units)
         {
-            unit.State.RestoreHp();
             if (unit.State.CanAct)
             {
                 unit.Hold();
@@ -499,7 +550,11 @@ public sealed class GameSession : MonoBehaviour
         RaiseAssignment(_id);
         SurvivorUnit unit = unitsById[_id];
         RefreshDefenseMarker(unit);
-        if (Phase == SessionPhase.Prep && board.WorkOf(_id) == WorkAssignment.Production)
+        if (IsHeldByTreatment(_id))
+        {
+            _error = "치료 중 — 경보 때 방어 위치로 이동";
+        }
+        else if (Phase == SessionPhase.Prep && board.WorkOf(_id) == WorkAssignment.Production)
         {
             // 평시 생산은 유지한다. 임시 이동 중이었다면 생산 배정으로 복귀한다.
             if (unit.State.Activity != SurvivorActivity.Working)
@@ -536,7 +591,11 @@ public sealed class GameSession : MonoBehaviour
         RaiseAssignment(_id);
         SurvivorUnit unit = unitsById[_id];
         RefreshDefenseMarker(unit);
-        if (Phase == SessionPhase.Prep && board.WorkOf(_id) == WorkAssignment.Production)
+        if (IsHeldByTreatment(_id))
+        {
+            _error = "치료 중 — 경보 때 탑으로 이동";
+        }
+        else if (Phase == SessionPhase.Prep && board.WorkOf(_id) == WorkAssignment.Production)
         {
             // 평시 생산은 유지한다. 임시 이동 중이었다면 생산 배정으로 복귀한다.
             if (unit.State.Activity != SurvivorActivity.Working)
@@ -551,6 +610,9 @@ public sealed class GameSession : MonoBehaviour
         }
         return true;
     }
+
+    // 준비 단계에서 치료에 묶인 인원은 치료소를 떠나지 않는다. 경보 이후는 일시정지 상태라 방어 명령을 그대로 받는다.
+    bool IsHeldByTreatment(string _id) => Phase == SessionPhase.Prep && treatment.Involves(_id);
 
     void RefreshDefenseMarker(SurvivorUnit _unit)
     {
@@ -570,7 +632,7 @@ public sealed class GameSession : MonoBehaviour
     public bool CommandMove(string _id, Vector3 _position)
     {
         SurvivorUnit unit = FindUnit(_id);
-        if (!CanCommand || unit == null || !unit.State.CanAct)
+        if (!CanCommand || unit == null || !unit.State.CanAct || IsHeldByTreatment(_id))
         {
             return false;
         }
@@ -581,7 +643,7 @@ public sealed class GameSession : MonoBehaviour
     public bool CommandAttack(string _id, EnemyUnit _target)
     {
         SurvivorUnit unit = FindUnit(_id);
-        if (!CanCommand || unit == null || !unit.State.CanAct || !_target)
+        if (!CanCommand || unit == null || !unit.State.CanAct || !_target || IsHeldByTreatment(_id))
         {
             return false;
         }
@@ -611,6 +673,15 @@ public sealed class GameSession : MonoBehaviour
     void ApplyPeacetimeOrder(SurvivorUnit _unit)
     {
         string id = _unit.State.Id;
+        if (!_unit.State.CanAct)
+        {
+            return;
+        }
+        if (treatment.Involves(id))
+        {
+            OrderToTreatment(_unit);
+            return;
+        }
         if (board.WorkOf(id) == WorkAssignment.Production && production.TryClaim(id, out Vector3 slot))
         {
             _unit.OrderWork(slot);
@@ -642,14 +713,15 @@ public sealed class GameSession : MonoBehaviour
         return null;
     }
 
-    int ActiveWork()
+    // 생산에 기여하는 실효 작업량. 경상은 효율이 줄고, 중상·치료 중은 Working이 아니어서 빠진다.
+    float ActiveWork()
     {
-        int total = 0;
+        float total = 0;
         foreach (SurvivorUnit unit in units)
         {
-            if (unit.State.Activity == SurvivorActivity.Working && unit.AtWorkSlot)
+            if (unit.AtWorkSlot)
             {
-                total += unit.State.Work;
+                total += unit.State.EffectiveWork;
             }
         }
         return total;
@@ -687,12 +759,22 @@ public sealed class GameSession : MonoBehaviour
         for (int index = 0; index < _ids.Count; index++)
         {
             SurvivorUnit unit = FindUnit(_ids[index]);
+            if (treatment.Involves(_ids[index]))
+            {
+                _error = "치료 중인 인원은 치료를 취소해야 파견할 수 있습니다.";
+                return false;
+            }
+            if (unit != null && unit.State.IsCritical)
+            {
+                _error = "중상인 인원은 파견할 수 없습니다.";
+                return false;
+            }
             if (unit == null || !unit.State.CanAct)
             {
                 _error = "파견할 수 없는 인원입니다.";
                 return false;
             }
-            members[index] = new ExpeditionMember(unit.State.Id, unit.State.Exploration);
+            members[index] = new ExpeditionMember(unit.State.Id, unit.State.EffectiveExploration);
         }
         if (!expeditions.TryStart(_regionId, members, out _error))
         {
@@ -707,6 +789,17 @@ public sealed class GameSession : MonoBehaviour
         }
         GameEvents.RaiseExpeditionStarted(_regionId, party);
         return true;
+    }
+
+    // 패널 미리보기가 쓰는 파티 탐사 합. 실제 판정과 같은 함수로 계산한다.
+    public int PartyExploration(IReadOnlyList<string> _ids)
+    {
+        var members = new List<ExpeditionMember>();
+        foreach (string id in _ids)
+        {
+            members.Add(new ExpeditionMember(id, FindUnit(id).State.EffectiveExploration));
+        }
+        return ExpeditionSystem.TotalExploration(members);
     }
 
     void TickExpeditions(float _deltaTime)
@@ -788,6 +881,15 @@ public sealed class GameSession : MonoBehaviour
             return;
         }
         unit.EndAway(returnPoint.position);
+        // 귀환 중상자는 준비 단계면 바로, 경보·전투면 다음 준비 시작에 치료소로 옮긴다(V2-IMPL-03).
+        if (unit.State.IsCritical)
+        {
+            if (flow.Phase == SessionPhase.Prep)
+            {
+                MoveToWard(unit);
+            }
+            return;
+        }
         if (board.ResolveReturn(_id))
         {
             RaiseAssignment(_id);
@@ -830,7 +932,7 @@ public sealed class GameSession : MonoBehaviour
             maxHp = _candidate.maxHp,
             trait = _candidate.trait,
         };
-        var survivor = new SurvivorState(data, _newJoin: true);
+        var survivor = new SurvivorState(data, _newJoin: true, _injury: table.injury);
         SurvivorUnit unit = Instantiate(survivorPrefab, joinPoint.position, Quaternion.identity, survivorRoot);
         unit.name = "Survivor_Joined" + data.id;
         DefenseMarkerView marker = Instantiate(defenseMarkerPrefab, joinPoint.position, Quaternion.identity, survivorRoot);
@@ -893,6 +995,148 @@ public sealed class GameSession : MonoBehaviour
         }
         GameEvents.RaiseRecruitmentRejected(RecruitmentSystem.REASON_DECLINED);
         return true;
+    }
+
+    // ── 치료 ──
+    // 치료 시작의 유일한 권위 경로. 실패하면 아무것도 바뀌지 않고 사유를 돌려준다(V2-IMPL-05).
+    public bool TryStartTreatment(string _patientId, string _workerId, out string _error)
+    {
+        SurvivorUnit patient = FindUnit(_patientId);
+        SurvivorUnit worker = FindUnit(_workerId);
+        if (!treatment.TryStart(flow.Phase, patient != null ? patient.State : null, worker != null ? worker.State : null, economy, out string reason))
+        {
+            _error = SurvivorLabels.TreatmentReason(reason);
+            GameEvents.RaiseTreatmentRejected(reason);
+            return false;
+        }
+        GameEvents.RaiseTreatmentStarted(_patientId, _workerId, treatment.Cost);
+        ApplyPeacetimeOrder(worker);
+        ApplyPeacetimeOrder(patient);
+        _error = null;
+        return true;
+    }
+
+    // 담당자를 잃은 치료에 새 담당자를 지정한다. 비용을 다시 받지 않는다(V2-IMPL-06).
+    public bool TryAssignTreatmentWorker(string _workerId, out string _error)
+    {
+        SurvivorUnit worker = FindUnit(_workerId);
+        if (!treatment.TryAssignWorker(flow.Phase, worker != null ? worker.State : null, out string reason))
+        {
+            _error = SurvivorLabels.TreatmentReason(reason);
+            GameEvents.RaiseTreatmentRejected(reason);
+            return false;
+        }
+        GameEvents.RaiseTreatmentResumed(treatment.Current.Patient.Id, _workerId);
+        ApplyPeacetimeOrder(worker);
+        _error = null;
+        return true;
+    }
+
+    // 플레이어 취소. 환불하지 않는다(V2-IMPL-06).
+    public bool TryCancelTreatment(out string _error)
+    {
+        TreatmentJob ended = treatment.End();
+        if (ended == null)
+        {
+            _error = SurvivorLabels.TreatmentReason(TreatmentSystem.REASON_NO_JOB);
+            return false;
+        }
+        GameEvents.RaiseTreatmentCancelled(ended.Patient.Id, TreatmentSystem.END_PLAYER);
+        ReleaseFromTreatment(ended);
+        _error = null;
+        return true;
+    }
+
+    void TickTreatment(float _deltaTime)
+    {
+        if (treatment.DropUnavailableWorker())
+        {
+            GameEvents.RaiseTreatmentPaused(treatment.Current.Patient.Id);
+        }
+        TreatmentJob job = treatment.Current;
+        if (job == null || job.NeedsWorker)
+        {
+            return;
+        }
+        TreatmentJob done = treatment.Tick(_deltaTime, FindUnit(job.Worker.Id).AtTreatmentSlot);
+        if (done != null)
+        {
+            GameEvents.RaiseTreatmentCompleted(done.Patient.Id, done.Patient.Hp);
+            ReleaseFromTreatment(done);
+        }
+    }
+
+    // 치료가 끝나면 저장된 배정으로 돌아간다. 그동안 정원이 찼으면 방어 대기로 돌린다(V2-IMPL-04, 05).
+    void ReleaseFromTreatment(TreatmentJob _job)
+    {
+        if (_job.Worker != null)
+        {
+            ReturnToDuty(_job.Worker.Id);
+        }
+        ReturnToDuty(_job.Patient.Id);
+    }
+
+    void ReturnToDuty(string _id)
+    {
+        SurvivorUnit unit = FindUnit(_id);
+        // 아직 중상이면 대기 자리에 남고, 다음 치료를 기다린다.
+        if (!unit.State.CanAct)
+        {
+            return;
+        }
+        infirmary.Release(_id);
+        if (board.ResolveReturn(_id))
+        {
+            RaiseAssignment(_id);
+        }
+        if (flow.Phase == SessionPhase.Prep)
+        {
+            ApplyPeacetimeOrder(unit);
+        }
+    }
+
+    void OrderToTreatment(SurvivorUnit _unit)
+    {
+        string id = _unit.State.Id;
+        production.Release(id);
+        if (treatment.Current.Worker == _unit.State)
+        {
+            _unit.OrderTreat(infirmary.WorkerPosition);
+        }
+        else if (infirmary.TryClaimWait(id, out Vector3 seat))
+        {
+            _unit.OrderTreat(seat);
+        }
+    }
+
+    void MoveToWard(SurvivorUnit _unit)
+    {
+        string id = _unit.State.Id;
+        production.Release(id);
+        if (infirmary.TryClaimWait(id, out Vector3 seat))
+        {
+            _unit.PlaceAt(seat);
+        }
+    }
+
+    // 사망한 환자의 치료는 환불 없이 끝난다. 담당자가 사망하면 멈추고 새 담당자를 기다린다.
+    void OnTreatmentParticipantDied(string _id)
+    {
+        TreatmentJob job = treatment.Current;
+        if (job == null)
+        {
+            return;
+        }
+        if (job.Patient.Id == _id)
+        {
+            treatment.End();
+            GameEvents.RaiseTreatmentCancelled(_id, TreatmentSystem.END_PATIENT_DIED);
+            ReleaseFromTreatment(job);
+        }
+        else if (job.Worker != null && job.Worker.Id == _id && treatment.DropUnavailableWorker())
+        {
+            GameEvents.RaiseTreatmentPaused(job.Patient.Id);
+        }
     }
 
     // ── 건설 ──
@@ -964,7 +1208,8 @@ public sealed class GameSession : MonoBehaviour
         // 표시 메시가 탑 위로 이동해도 생존자의 지상 점유는 유지한다.
         foreach (SurvivorUnit unit in units)
         {
-            if (!unit.State.CanAct)
+            // 쓰러진 인력도 그 자리를 차지한다.
+            if (!unit.State.IsAlive || unit.State.IsAway)
             {
                 continue;
             }
@@ -1081,10 +1326,15 @@ public sealed class GameSession : MonoBehaviour
     {
         SurvivorUnit unit = FindUnit(_info.survivorId);
         production.Release(_info.survivorId);
+        if (infirmary)
+        {
+            infirmary.Release(_info.survivorId);
+        }
         if (unit != null)
         {
             deathsThisWave.Add(unit.State.DisplayName);
         }
+        OnTreatmentParticipantDied(_info.survivorId);
     }
 
     // ── 디버그(PocDebug 전용) ──
@@ -1119,6 +1369,16 @@ public sealed class GameSession : MonoBehaviour
         }
     }
 
+    // 디버그 전용: 실제 피해 경로로 HP를 낮춘다. 올리는 경로는 치료뿐이다.
+    public void DebugLowerHp(string _id, float _hp)
+    {
+        SurvivorUnit unit = FindUnit(_id);
+        if (unit != null)
+        {
+            unit.ApplyDamage(unit.State.Hp - _hp, CAUSE_DEBUG);
+        }
+    }
+
     // 디버그 전용: 구조 몫 후보를 공통 합류 경로로 바로 붙인다. 상한 판정은 방문 영입과 같다.
     public bool DebugJoinSurvivor(out string _error)
     {
@@ -1146,9 +1406,19 @@ public sealed class GameSession : MonoBehaviour
         }
         waveDirector.ClearRemaining();
         flow.RestartWave();
+        TreatmentJob job = treatment.End();
+        if (job != null)
+        {
+            GameEvents.RaiseTreatmentCancelled(job.Patient.Id, TreatmentSystem.END_DEBUG);
+        }
+        // 디버그 재시작은 같은 웨이브를 같은 조건으로 다시 시험하는 기능이라 HP 복구를 남긴다. 정규 진행에는 쓰지 않는다.
         foreach (SurvivorUnit unit in units)
         {
             unit.State.RestoreHp();
+            if (infirmary)
+            {
+                infirmary.Release(unit.State.Id);
+            }
         }
         EnterPrep();
     }

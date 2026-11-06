@@ -28,3 +28,12 @@ public enum BuildingType
     Wall,
     Tower,
 }
+
+// HP에서 파생하는 부상 상태. 나빠지는 순서로 둔다. 저장하지 않는다(기준서 4.3).
+public enum InjuryStatus
+{
+    Normal,
+    Light,
+    Critical,
+    Dead,
+}

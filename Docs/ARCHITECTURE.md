@@ -19,12 +19,15 @@
 | `Game/Model` | `ResourceEconomy` | 스크랩, 생산 누적, 비용 차감. 음수 금지 |
 | `Game/Model` | `ExpeditionSystem` | 파견·시간 경과·결과 판정(DEC-16) |
 | `Game/Model` | `RecruitmentSystem` | 인력 수급: 수용 상한 판정(살아 있는 인원+예약 < capacity), 방문 후보 추첨, 신규 ID 발급, 방문 상태. G3 구조 예약 API 포함 |
+| `Game/Model` | `InjuryRules` | HP에서 부상 상태 파생, 효율, 적 표적 우선순위. 수치는 `injury` 테이블 |
+| `Game/Model` | `TreatmentSystem` | 치료 1건의 시작 조건, 진행률, 일시정지·재개·담당자 교체, 비용 1회 차감. 시간은 호출 측이 넘긴다 |
 | `Game/Model` | `SessionRng` | 시드 하나에서 용도별 독립 `System.Random` 생성 |
 | `Game/Session` | `GameSession` | 단계 전환, 웨이브 번호, 승패, 하위 시스템 소유 |
 | `Game/Session` | `SessionLaunch` | Title에서 Game으로 시드 전달. Game 직접 실행 시 기본값 |
 | `Game/Units` | `SurvivorUnit` | 이동, 자동 표적·사격, 직접 명령, 사망. NavMeshAgent 사용 |
 | `Game/Units` | `EnemyUnit` | 핵심 시설 추적, 사거리 내 대응, 막힌 경로의 방벽 공격 |
 | `Game/World` | `CoreFacility`, `ProductionFacility` | 핵심 시설 HP, 생산 슬롯 위치 |
+| `Game/World` | `InfirmaryFacility` | 사전 배치된 치료소. 담당자 자리와 환자 대기 자리(수용 상한 이상) |
 | `Game/World` | `BuildingBase`, `WallBuilding`, `TowerBuilding` | HP, 수리, 파괴. 방벽은 NavMeshObstacle carve, 탑은 정원 1 |
 | `Game/World` | `BuildZone` | 설치 허용 구역 |
 | `Game/World` | `WaveDirector` | 테이블 편성으로 두 경로에 스폰 |
@@ -50,7 +53,7 @@ Prep(100초) → Alert(10초) → Combat(최대 100초) → Result(확인 대기
 
 - Alert 시작: 파견 중이 아닌 생존 인력이 방어 위치로 실제 이동한다.
 - Combat 시작: `WaveDirector`가 스폰한다. 전원 처치 또는 시간 상한(DEC-15)으로 끝난다.
-- Result 진입: 생존자 HP 전량 회복(DEC-09). 확인을 누르면 다음 Prep으로 가고 인력은 작업 배정으로 복귀한다.
+- Result 진입: HP를 회복하지 않는다(v2가 DEC-09를 오버라이드). 확인을 누르면 다음 Prep으로 가고 인력은 작업 배정으로 복귀한다.
 - 패배: 핵심 시설 HP 0 또는 파견 포함 전원 사망(DEC-14). 어느 단계에서든 즉시 판정한다.
 
 ## 생존자 행동
@@ -63,6 +66,7 @@ Prep(100초) → Alert(10초) → Combat(최대 100초) → Result(확인 대기
 | Guarding | 방어 위치로 이동해 대기, 사거리 내 자동 사격 |
 | ManualMove | 지정 지점으로 이동 후 그 자리에서 자동 사격 |
 | ManualAttack | 지정 적 추격·공격. 대상이 사라지면 그 자리에서 자동 사격 |
+| Treating | 치료소의 담당자 자리 또는 환자 대기 자리로 이동·대기. 생산·사격 없음 |
 | Away | 파견 중. 오브젝트 비활성, 어떤 명령도 불가 |
 | Dead | 영구 제외 |
 
@@ -80,6 +84,16 @@ Prep 중 직접 이동한 인력은 생산에 기여하지 않고, 선택 패널
 - 방문자는 해당 웨이브 준비 시작(`EnterPrep`)에 도착하고, 경보 진입(`EnterAlert`)에 미결정이면 만료된다. 영입의 권위 경로는 `GameSession.TryRecruitVisitor(out error)` 하나다: 방문 대기 → 상한 → 스크랩 차감 → 공통 합류 순서이며, 실패하면 아무것도 바뀌지 않고 사유(`no_scrap`, `full`)를 돌려준다. '보내기'와 만료는 `RecruitmentRejected(declined/expired)`로 기록된다.
 - 합류는 `GameSession.JoinSurvivor` 한 경로로만 한다. `Survivor.prefab`을 씬의 `JoinPoint`(거점 입구)에 Instantiate하고, 초기 인원과 같은 `RegisterSurvivor`로 등록(board·unitsById·units·Bind·표식·배정 로그)한다. 합류 인력은 HP 최대, 작업은 방어 대기, 방어 위치는 합류 지점이되 플레이어가 정하기 전까지는 '방어 위치 미지정'으로 표시된다(V2-IMPL-08). 씬 표식이 없으므로 `DefenseMarker.prefab`을 함께 놓는다.
 - HUD는 `인원 현재/최대`를 항상 보여 주고, 대기 중 방문자가 있으면 `방문자 도착` 항목을 켠다. `VisitorPanel`(MVP: `VisitorPanelView`+`VisitorPanelPresenter`)에서 이름·능력치·특성·비용·현재 인원/상한과 영입·보내기를 처리한다. 거점 입구 표식(`VisitorMarkerView`)은 방문 대기 중에만 켜지고 콜라이더가 없어 클릭 판정에 끼지 않는다.
+
+## 부상과 치료 (v2)
+
+- **상태는 저장하지 않는다.** `SurvivorState.Injury`가 HP와 `injury` 테이블에서 정상·경상·중상·사망을 파생하고, 경계값은 위 구간이다(정확히 70%는 정상, 30%는 경상). `CanAct`는 `살아 있음 && 파견 아님 && 중상 아님`이므로 입력·명령·배정·정원·탐사가 모두 같은 값을 본다.
+- **효율은 한 곳에서 곱한다.** `SurvivorState`의 `CombatEfficiency`·`WorkEfficiency`·`ExplorationEfficiency`다(V2-IMPL-07). 초당 피해·생산 기여·치료 속도·파티 탐사 합에만 쓰고 사거리·이동 속도·표시 능력치에는 쓰지 않는다. 파티 탐사 합은 `ExpeditionSystem.TotalExploration`(인원별 실효값을 더한 뒤 반올림, .5는 올림, TD-29d) 하나로 미리보기와 판정이 같은 값을 쓴다.
+- **쓰러짐.** 중상이 되면 `SurvivorUnit`이 그 자리에서 멈추고 탑에서 내려온다. 배정은 보존하고 변경은 거부한다(V2-IMPL-04). 적은 어그로 범위에 행동 가능한 인력이 없을 때만 쓰러진 인력을 친다(V2-IMPL-02). 다음 준비 시작에 치료소 대기 자리로 순간 이동한다(V2-IMPL-03). 전원 중상은 전멸이 아니다(`IsWiped`는 사망만 본다).
+- **치료.** 권위 경로는 `GameSession.TryStartTreatment` 하나이고, 조건 판정은 `TreatmentSystem.CheckStart`가 하며 패널의 사유 표시도 같은 함수를 쓴다. 실패하면 아무것도 바뀌지 않고 `TreatmentRejected(reason)`이 기록된다. 소요 시간은 `baseSeconds ÷ ((1 + speedPerWork × (Work − referenceWork)) × 담당자 효율)`이고(TD-29b), 담당자가 치료소 자리에 도착한 동안만 진행하며, 완료 순간에만 HP가 오른다. 진행률은 비율로 저장해 담당자가 바뀌어도 이어진다.
+- **경보와 재개.** 경보에 멈추고(`TreatmentPaused`) 담당자와 경상 환자는 방어로 간다. 다음 준비 시작에 같은 담당자가 행동 가능하면 자동 재개(`TreatmentResumed`), 아니면 패널에서 `TryAssignTreatmentWorker`로 새 담당자를 지정할 때까지 기다린다. 재개는 무료이고, 환자 사망·취소는 환불 없이 끝난다(`TreatmentCancelled`).
+- **정원.** `AssignmentBoard`는 `TreatmentSystem.Involves`를 받아 치료에 묶인 인원을 정원에서 뺀다. 치료가 끝나거나 회복하면 `ResolveReturn`으로 정원을 다시 보고 찼으면 방어 대기로 돌린다.
+- 치료소는 `Infirmary.prefab`을 `Environment` 아래 배치해 NavMesh에 포함했다. 건설 허용 구역 밖이고 건설 메뉴에 없다.
 
 ## 이벤트
 

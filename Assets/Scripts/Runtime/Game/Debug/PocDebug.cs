@@ -106,6 +106,8 @@ public sealed class PocDebug : MonoBehaviour
         }
     }
 
+    public void LowerHp(string _id, float _hp) => session.DebugLowerHp(_id, _hp);
+
     [ContextMenu("디버그 합류(구조 몫)")]
     public void DebugJoinSurvivor()
     {

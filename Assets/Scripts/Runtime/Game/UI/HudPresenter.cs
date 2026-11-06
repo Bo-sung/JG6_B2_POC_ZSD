@@ -26,7 +26,21 @@ public sealed class HudPresenter
             : $"인원 {session.AliveCount}/{session.Capacity}";
         view.ShowSpeed(session.SpeedOptions, session.Speed);
         view.ShowVisitorNotice(session.Recruitment.PendingVisitor != null);
+        view.ShowTreatment(TreatmentLabel(session.Treatment.Current));
         view.Show(wave, countdown, scrap, core, survivors);
+    }
+
+    static string TreatmentLabel(TreatmentJob _job)
+    {
+        if (_job == null)
+        {
+            return "치료소";
+        }
+        if (_job.NeedsWorker)
+        {
+            return "치료소 · 담당자 필요";
+        }
+        return $"치료소 · {(_job.IsPaused ? "일시정지" : "치료 중")} {Mathf.FloorToInt(_job.Progress * 100)}%";
     }
 
     static bool HasTimer(SessionPhase _phase) => _phase == SessionPhase.Prep || _phase == SessionPhase.Alert || _phase == SessionPhase.Combat;

@@ -40,9 +40,9 @@ public sealed class ResourceEconomy
         Scrap = checked(Scrap + _amount);
     }
 
-    public int TickProduction(float _deltaSeconds, int _totalWork)
+    public int TickProduction(float _deltaSeconds, float _totalWork)
     {
-        if (_deltaSeconds < 0 || float.IsNaN(_deltaSeconds) || float.IsInfinity(_deltaSeconds) || _totalWork < 0)
+        if (_deltaSeconds < 0 || float.IsNaN(_deltaSeconds) || float.IsInfinity(_deltaSeconds) || _totalWork < 0 || float.IsNaN(_totalWork))
         {
             throw new ArgumentOutOfRangeException(nameof(_deltaSeconds));
         }

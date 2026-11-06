@@ -15,6 +15,8 @@ public sealed class GameplayTableData
     public SurvivorCombatData survivorCombat;
     public SurvivorData[] survivors = Array.Empty<SurvivorData>();
     public RecruitmentData recruitment;
+    public InjuryData injury;
+    public TreatmentData treatment;
     public BuildingsData buildings;
     public EnemyData[] enemies = Array.Empty<EnemyData>();
     public WaveData[] waves = Array.Empty<WaveData>();

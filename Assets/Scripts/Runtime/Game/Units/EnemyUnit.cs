@@ -6,8 +6,8 @@ using UnityEngine.AI;
 [RequireComponent(typeof(NavMeshAgent))]
 public sealed class EnemyUnit : MonoBehaviour
 {
-    // 동시에 탐지할 생존자 수의 상한. 초기 7명이면 충분한 버퍼 크기이며 밸런스 수치가 아니다.
-    const int TARGET_BUFFER_SIZE = 8;
+    // 동시에 탐지할 생존자 수의 상한. 수용 상한 9명이면 충분한 버퍼 크기이며 밸런스 수치가 아니다.
+    const int TARGET_BUFFER_SIZE = 16;
 
     public enum Mode
     {
@@ -151,7 +151,7 @@ public sealed class EnemyUnit : MonoBehaviour
     {
         if (survivorTarget)
         {
-            bool inRange = survivorTarget.State.CanAct && !survivorTarget.IsProtected
+            bool inRange = survivorTarget.IsTargetable
                 && HorizontalDistance(survivorTarget.transform.position) <= data.attackRange
                 && !IsMeleeBlocked(survivorTarget.transform.position);
             if (inRange)
@@ -201,20 +201,23 @@ public sealed class EnemyUnit : MonoBehaviour
     }
 
     // 지형 벽 너머는 보이지 않고, 보이더라도 걸어서 닿지 못하면(방벽 너머) 대상으로 삼지 않는다.
+    // 어그로 범위에 행동 가능한 인력이 있으면 그쪽을 먼저 고르고, 없을 때만 쓰러진 인력을 친다(V2-IMPL-02).
     SurvivorUnit FindReachableSurvivor()
     {
         int count = Physics.OverlapSphereNonAlloc(transform.position, data.aggroRange, targetBuffer, GameLayers.PLAYER_MASK, QueryTriggerInteraction.Ignore);
         SurvivorUnit nearest = null;
         float nearestDistance = float.MaxValue;
+        bool nearestCanAct = false;
         for (int index = 0; index < count; index++)
         {
             SurvivorUnit survivor = targetBuffer[index].GetComponentInParent<SurvivorUnit>();
-            if (!survivor || survivor.State == null || !survivor.State.CanAct || survivor.IsProtected)
+            if (!survivor || survivor.State == null || !survivor.IsTargetable)
             {
                 continue;
             }
+            bool canAct = survivor.State.CanAct;
             float distance = (survivor.transform.position - transform.position).sqrMagnitude;
-            if (distance >= nearestDistance)
+            if (!InjuryRules.IsBetterTarget(canAct, distance, nearest, nearestCanAct, nearestDistance))
             {
                 continue;
             }
@@ -228,6 +231,7 @@ public sealed class EnemyUnit : MonoBehaviour
             {
                 nearest = survivor;
                 nearestDistance = distance;
+                nearestCanAct = canAct;
             }
         }
         return nearest;

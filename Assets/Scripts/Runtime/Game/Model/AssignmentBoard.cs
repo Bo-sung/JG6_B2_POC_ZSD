@@ -19,7 +19,7 @@ public readonly struct DefenseAssignment
 }
 
 // 작업 배정과 방어 배정을 독립으로 저장한다. 한쪽을 바꿔도 다른 쪽은 그대로다(POC_CORE 3.1).
-// 사망자와 파견 중인 인원의 배정 변경은 거부한다. 단계별 허용 여부는 SessionFlow가 판단한다.
+// 사망자, 파견 중, 중상인 인원의 배정 변경은 거부한다. 단계별 허용 여부는 SessionFlow가 판단한다.
 public sealed class AssignmentBoard
 {
     sealed class Entry
@@ -34,14 +34,17 @@ public sealed class AssignmentBoard
     readonly Dictionary<string, Entry> entries = new Dictionary<string, Entry>(StringComparer.Ordinal);
     readonly List<Entry> ordered = new List<Entry>();
     readonly int maxWorkers;
+    readonly Func<string, bool> isInTreatment;
 
-    public AssignmentBoard(int _maxWorkers)
+    // _isInTreatment는 치료에 묶인 인원을 정원에서 뺀다(V2-IMPL-05). 치료 상태를 여기에 복사해 두지 않는다.
+    public AssignmentBoard(int _maxWorkers, Func<string, bool> _isInTreatment = null)
     {
         if (_maxWorkers < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(_maxWorkers));
         }
         maxWorkers = _maxWorkers;
+        isInTreatment = _isInTreatment;
     }
 
     public int MaxWorkers => maxWorkers;
@@ -61,7 +64,7 @@ public sealed class AssignmentBoard
     public DefenseAssignment DefenseOf(string _id) => entries[_id].defense;
     public bool IsDefenseAssigned(string _id) => entries[_id].defenseAssigned;
 
-    // 정원은 지금 거점에서 일할 수 있는 인원만 센다. 파견 중인 작업자의 자리는 다른 인원이 맡을 수 있다.
+    // 정원은 지금 거점에서 일할 수 있는 인원만 센다. 파견·중상·치료 중인 작업자의 자리는 다른 인원이 맡을 수 있다.
     public int ActiveWorkerCount
     {
         get
@@ -69,7 +72,7 @@ public sealed class AssignmentBoard
             int count = 0;
             foreach (Entry entry in ordered)
             {
-                if (entry.work == WorkAssignment.Production && entry.survivor.CanAct)
+                if (entry.work == WorkAssignment.Production && entry.survivor.CanAct && (isInTreatment == null || !isInTreatment(entry.survivor.Id)))
                 {
                     count++;
                 }
@@ -145,7 +148,7 @@ public sealed class AssignmentBoard
         }
     }
 
-    // 귀환 시 호출한다. 파견 중 자리가 채워졌으면 방어 대기로 돌리고 true를 반환한다.
+    // 귀환·중상 회복·치료 종료 시 호출한다. 그동안 자리가 채워졌으면 방어 대기로 돌리고 true를 반환한다.
     public bool ResolveReturn(string _id)
     {
         Entry entry = entries[_id];
@@ -173,6 +176,11 @@ public sealed class AssignmentBoard
         if (_entry.survivor.IsAway)
         {
             _error = "파견 중인 생존자는 배정할 수 없습니다.";
+            return false;
+        }
+        if (_entry.survivor.IsCritical)
+        {
+            _error = "중상인 생존자는 배정을 바꿀 수 없습니다.";
             return false;
         }
         _error = null;

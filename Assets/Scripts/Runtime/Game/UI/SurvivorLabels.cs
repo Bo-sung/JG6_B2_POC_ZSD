@@ -11,14 +11,63 @@ public static class SurvivorLabels
         _ => "범용",
     };
 
-    public static string Status(SurvivorState _state) => _state.Activity switch
+    public static string Status(SurvivorState _state)
     {
-        SurvivorActivity.Working => "작업",
-        SurvivorActivity.Guarding => "경비",
-        SurvivorActivity.ManualMove => "명령",
-        SurvivorActivity.ManualAttack => "명령",
-        SurvivorActivity.Away => "탐사",
+        if (_state.IsCritical && !_state.IsAway)
+        {
+            return "중상";
+        }
+        string activity = _state.Activity switch
+        {
+            SurvivorActivity.Working => "작업",
+            SurvivorActivity.Guarding => "경비",
+            SurvivorActivity.ManualMove => "명령",
+            SurvivorActivity.ManualAttack => "명령",
+            SurvivorActivity.Treating => "치료",
+            SurvivorActivity.Away => "탐사",
+            _ => "사망",
+        };
+        return _state.Injury == InjuryStatus.Light && !_state.IsAway ? "경상·" + activity : activity;
+    }
+
+    public static string Injury(InjuryStatus _status) => _status switch
+    {
+        InjuryStatus.Normal => "정상",
+        InjuryStatus.Light => "경상",
+        InjuryStatus.Critical => "중상",
         _ => "사망",
+    };
+
+    // 선택 패널의 상태 표기. 예: '경상 · 효율 75%', '중상 · 치료 대기'.
+    public static string Condition(SurvivorState _state, bool _treating)
+    {
+        string injury = Injury(_state.Injury);
+        switch (_state.Injury)
+        {
+            case InjuryStatus.Light:
+                injury += $" · 효율 {(int)System.Math.Round(_state.WorkEfficiency * 100)}%";
+                break;
+            case InjuryStatus.Critical:
+                return injury + (_treating ? " · 치료 중" : " · 치료 대기");
+        }
+        return _treating ? injury + " · 치료 중" : injury;
+    }
+
+    public static string TreatmentReason(string _reason) => _reason switch
+    {
+        TreatmentSystem.REASON_NOT_PREP => "치료는 준비 단계에만 시작할 수 있습니다.",
+        TreatmentSystem.REASON_BUSY => "이미 진행 중이거나 일시정지된 치료가 있습니다.",
+        TreatmentSystem.REASON_NO_WORKER => "담당자를 선택하세요.",
+        TreatmentSystem.REASON_WORKER_UNAVAILABLE => "담당자가 행동할 수 없습니다(사망·파견·중상).",
+        TreatmentSystem.REASON_NO_PATIENT => "환자를 선택하세요.",
+        TreatmentSystem.REASON_PATIENT_DEAD => "사망자는 치료할 수 없습니다.",
+        TreatmentSystem.REASON_PATIENT_AWAY => "파견 중인 인원은 치료할 수 없습니다.",
+        TreatmentSystem.REASON_PATIENT_FULL_HP => "HP가 가득 찬 인원은 치료할 필요가 없습니다.",
+        TreatmentSystem.REASON_SELF => "담당자는 자기 자신을 치료할 수 없습니다.",
+        TreatmentSystem.REASON_NO_SCRAP => "스크랩이 부족합니다.",
+        TreatmentSystem.REASON_NO_JOB => "진행 중인 치료가 없습니다.",
+        TreatmentSystem.REASON_HAS_WORKER => "이미 담당자가 있습니다.",
+        _ => _reason,
     };
 
     public static string Work(WorkAssignment _work) => _work == WorkAssignment.Production ? "생산" : "방어 대기";
@@ -44,8 +93,14 @@ public static class SurvivorLabels
 
     public static string Action(SurvivorUnit _unit)
     {
+        if (_unit.State.IsCritical && !_unit.State.IsAway)
+        {
+            return "쓰러짐 · 치료 대기";
+        }
         switch (_unit.State.Activity)
         {
+            case SurvivorActivity.Treating:
+                return _unit.HasArrived ? "치료소에서 치료 중" : "치료소로 이동 중";
             case SurvivorActivity.Working:
                 return _unit.HasArrived ? "생산 작업 중" : "작업장으로 이동 중";
             case SurvivorActivity.Guarding:

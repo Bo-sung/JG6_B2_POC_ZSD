@@ -191,7 +191,7 @@ public sealed class PocRuleTests
         const double TOLERANCE = 0.025;
         ExpeditionRegionData region = TableManager.Instance.Gameplay.expeditions.Last();
         ExpeditionMember[] party = Party(region.maxParty);
-        int exploration = party.Sum(_member => _member.exploration);
+        int exploration = ExpeditionSystem.TotalExploration(party);
         var formula = new ExpeditionSystem(new[] { region }, new Random(1));
         double rewardChance = formula.RewardChance(region.id, exploration);
         double deathChance = formula.DeathChance(region.id, exploration, party.Length);

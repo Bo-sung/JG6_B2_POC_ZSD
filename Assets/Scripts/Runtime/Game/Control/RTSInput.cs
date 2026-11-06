@@ -45,6 +45,7 @@ public sealed class RTSInput : MonoBehaviour
         }
     }
     public event Action<string> CommandFeedback;
+    public event Action InfirmaryClicked;
     public TowerBuilding PickedDefenseTower { get; private set; }
     public SelectionModel Selection { get; private set; }
     public bool IsPickingDefense => pendingDefensePick != null;
@@ -142,10 +143,11 @@ public sealed class RTSInput : MonoBehaviour
     }
 
     // ── 입력 처리 ──
+    // 쓰러진 인력도 선택해 상태를 볼 수 있다. 명령은 GameSession이 거부한다.
     bool CanSelect(string _id)
     {
         SurvivorUnit unit = session.FindUnit(_id);
-        return unit != null && unit.State.CanAct;
+        return unit != null && unit.State.IsAlive && !unit.State.IsAway;
     }
 
     void ApplySelectionVisuals()
@@ -156,7 +158,7 @@ public sealed class RTSInput : MonoBehaviour
         }
         foreach (SurvivorUnit unit in session.Units)
         {
-            if (unit.State.CanAct)
+            if (CanSelect(unit.State.Id))
             {
                 unit.SetSelected(Selection.Contains(unit.State.Id));
             }
@@ -241,7 +243,7 @@ public sealed class RTSInput : MonoBehaviour
     {
         SurvivorUnit unit = PickComponent<SurvivorUnit>(_position, GameLayers.PLAYER_MASK);
         bool additive = IsShiftHeld();
-        if (unit && unit.State.CanAct)
+        if (unit && CanSelect(unit.State.Id))
         {
             if (additive)
             {
@@ -251,6 +253,12 @@ public sealed class RTSInput : MonoBehaviour
             {
                 Selection.Replace(new[] { unit.State.Id });
             }
+            return;
+        }
+        // 시설은 생존자에 가려지지 않을 때만 눌린다.
+        if (PickComponent<InfirmaryFacility>(_position, GameLayers.OBSTACLE_MASK))
+        {
+            InfirmaryClicked?.Invoke();
             return;
         }
         if (!additive)
@@ -302,9 +310,14 @@ public sealed class RTSInput : MonoBehaviour
         }
         if (enemy)
         {
+            bool commanded = false;
             foreach (string id in Selection.Ids)
             {
-                session.CommandAttack(id, enemy);
+                commanded |= session.CommandAttack(id, enemy);
+            }
+            if (!commanded)
+            {
+                CommandFeedback?.Invoke("명령할 수 없는 인원입니다.");
             }
             return;
         }
@@ -316,8 +329,7 @@ public sealed class RTSInput : MonoBehaviour
             }
             else if (session.CanCommand)
             {
-                IssueMove(point);
-                CommandFeedback?.Invoke("직접 이동 · 방어 배정 유지");
+                CommandFeedback?.Invoke(IssueMove(point) ? "직접 이동 · 방어 배정 유지" : "명령할 수 없는 인원입니다.");
             }
             else
             {
@@ -354,13 +366,15 @@ public sealed class RTSInput : MonoBehaviour
     }
 
     // 여러 명은 지점 주위 원으로 펼쳐 같은 점을 두고 다투지 않게 한다.
-    void IssueMove(Vector3 _point)
+    bool IssueMove(Vector3 _point)
     {
+        bool commanded = false;
         IReadOnlyList<string> ids = Selection.Ids;
         for (int index = 0; index < ids.Count; index++)
         {
-            session.CommandMove(ids[index], SpreadPoint(_point, index, ids.Count));
+            commanded |= session.CommandMove(ids[index], SpreadPoint(_point, index, ids.Count));
         }
+        return commanded;
     }
 
     public Vector3 SpreadPoint(Vector3 _point, int _index, int _count)

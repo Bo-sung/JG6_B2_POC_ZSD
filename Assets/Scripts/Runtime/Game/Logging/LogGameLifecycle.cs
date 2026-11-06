@@ -21,6 +21,13 @@ public sealed class LogGameLifecycle : MonoBehaviour
         GameEvents.RecruitmentAccepted += OnRecruitmentAccepted;
         GameEvents.RecruitmentRejected += OnRecruitmentRejected;
         GameEvents.SurvivorJoined += OnSurvivorJoined;
+        GameEvents.SurvivorInjured += OnSurvivorInjured;
+        GameEvents.TreatmentStarted += OnTreatmentStarted;
+        GameEvents.TreatmentPaused += OnTreatmentPaused;
+        GameEvents.TreatmentResumed += OnTreatmentResumed;
+        GameEvents.TreatmentCompleted += OnTreatmentCompleted;
+        GameEvents.TreatmentCancelled += OnTreatmentCancelled;
+        GameEvents.TreatmentRejected += OnTreatmentRejected;
         LogKitSetup.BeforeShutdown += EndForQuit;
     }
 
@@ -39,6 +46,13 @@ public sealed class LogGameLifecycle : MonoBehaviour
         GameEvents.RecruitmentAccepted -= OnRecruitmentAccepted;
         GameEvents.RecruitmentRejected -= OnRecruitmentRejected;
         GameEvents.SurvivorJoined -= OnSurvivorJoined;
+        GameEvents.SurvivorInjured -= OnSurvivorInjured;
+        GameEvents.TreatmentStarted -= OnTreatmentStarted;
+        GameEvents.TreatmentPaused -= OnTreatmentPaused;
+        GameEvents.TreatmentResumed -= OnTreatmentResumed;
+        GameEvents.TreatmentCompleted -= OnTreatmentCompleted;
+        GameEvents.TreatmentCancelled -= OnTreatmentCancelled;
+        GameEvents.TreatmentRejected -= OnTreatmentRejected;
         LogKitSetup.BeforeShutdown -= EndForQuit;
         EndForQuit();
     }
@@ -150,6 +164,56 @@ public sealed class LogGameLifecycle : MonoBehaviour
         {
             { "newId", _info.newId }, { "source", _info.source }
         });
+    }
+
+    void OnSurvivorInjured(GameEvents.SurvivorInjuredInfo _info)
+    {
+        Write("SurvivorInjured", new Dictionary<string, object>
+        {
+            { "id", _info.id }, { "hp", _info.hp }, { "status", _info.status }
+        });
+    }
+
+    void OnTreatmentStarted(GameEvents.TreatmentStartedInfo _info)
+    {
+        Write("TreatmentStarted", new Dictionary<string, object>
+        {
+            { "patientId", _info.patientId }, { "workerId", _info.workerId }, { "cost", _info.cost }
+        });
+    }
+
+    void OnTreatmentPaused(GameEvents.TreatmentPausedInfo _info)
+    {
+        Write("TreatmentPaused", new Dictionary<string, object> { { "patientId", _info.patientId } });
+    }
+
+    void OnTreatmentResumed(GameEvents.TreatmentResumedInfo _info)
+    {
+        Write("TreatmentResumed", new Dictionary<string, object>
+        {
+            { "patientId", _info.patientId }, { "workerId", _info.workerId }
+        });
+    }
+
+    void OnTreatmentCompleted(GameEvents.TreatmentCompletedInfo _info)
+    {
+        Write("TreatmentCompleted", new Dictionary<string, object>
+        {
+            { "patientId", _info.patientId }, { "hp", _info.hp }
+        });
+    }
+
+    void OnTreatmentCancelled(GameEvents.TreatmentCancelledInfo _info)
+    {
+        Write("TreatmentCancelled", new Dictionary<string, object>
+        {
+            { "patientId", _info.patientId }, { "reason", _info.reason }
+        });
+    }
+
+    void OnTreatmentRejected(GameEvents.TreatmentRejectedInfo _info)
+    {
+        Write("TreatmentRejected", new Dictionary<string, object> { { "reason", _info.reason } });
     }
 
     void OnSessionEnded(GameEvents.SessionEndInfo _info)

@@ -7,6 +7,7 @@ public enum SurvivorActivity
     Guarding,
     ManualMove,
     ManualAttack,
+    Treating,
     Away,
     Dead,
 }
@@ -20,7 +21,8 @@ public enum SurvivorSpecialty
 }
 
 // 생존자 한 명의 규칙 상태. Unity에 의존하지 않는다.
-// 사망은 되돌릴 수 없고(INV-02), 파견 중에는 거점 행동을 할 수 없다.
+// 사망은 되돌릴 수 없고(INV-02), 파견 중이거나 중상이면 거점 행동을 할 수 없다.
+// 부상 상태는 저장하지 않고 HP에서 파생한다(기준서 4.3).
 public sealed class SurvivorState
 {
     public string Id { get; }
@@ -35,12 +37,23 @@ public sealed class SurvivorState
     public float MaxHp { get; }
     public float Hp { get; private set; }
     public SurvivorActivity Activity { get; private set; }
+    readonly InjuryData injury;
 
     public bool IsAlive => Activity != SurvivorActivity.Dead;
     public bool IsAway => Activity == SurvivorActivity.Away;
-    public bool CanAct => IsAlive && !IsAway;
+    public InjuryStatus Injury => IsAlive ? InjuryRules.StatusOf(Hp, MaxHp, injury) : InjuryStatus.Dead;
+    public bool IsCritical => Injury == InjuryStatus.Critical;
+    public bool CanAct => IsAlive && !IsAway && !IsCritical;
 
-    public SurvivorState(SurvivorData _data, bool _newJoin = false)
+    // 효율 곱의 한 곳(V2-IMPL-07). 표시 능력치·사거리·이동 속도에는 쓰지 않는다. G4 특성 배율은 여기에 곱한다.
+    public float CombatEfficiency => InjuryRules.Efficiency(Injury, injury);
+    public float WorkEfficiency => InjuryRules.Efficiency(Injury, injury);
+    public float ExplorationEfficiency => InjuryRules.Efficiency(Injury, injury);
+    public float EffectiveWork => Work * WorkEfficiency;
+    public float EffectiveExploration => Exploration * ExplorationEfficiency;
+
+    // _injury가 없으면 부상 구간 없이 생사만 판정한다. 부상과 무관한 규칙 테스트가 쓰며 세션은 항상 테이블을 넘긴다.
+    public SurvivorState(SurvivorData _data, bool _newJoin = false, InjuryData _injury = null)
     {
         if (_data == null)
         {
@@ -54,6 +67,7 @@ public sealed class SurvivorState
         Specialty = SpecialtyOf(Combat, Work, Exploration);
         Trait = _data.trait ?? string.Empty;
         IsNewJoin = _newJoin;
+        injury = _injury;
         MaxHp = _data.maxHp;
         Hp = _data.maxHp;
         Activity = SurvivorActivity.Guarding;
@@ -95,7 +109,16 @@ public sealed class SurvivorState
         return true;
     }
 
-    // 사망자는 회복되지 않는다(DEC-09).
+    // 치료 완료의 회복. 사망자는 회복되지 않고 최대 HP를 넘지 않는다.
+    public void Heal(float _amount)
+    {
+        if (IsAlive && _amount > 0)
+        {
+            Hp = Math.Min(MaxHp, Hp + _amount);
+        }
+    }
+
+    // 디버그 웨이브 재시작 전용. 정규 진행에는 HP 자동 회복이 없다(DEC-09 오버라이드).
     public void RestoreHp()
     {
         if (IsAlive)

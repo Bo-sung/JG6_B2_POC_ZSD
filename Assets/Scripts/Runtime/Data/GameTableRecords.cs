@@ -65,6 +65,28 @@ public sealed class RecruitmentData
     public SurvivorData[] candidates = Array.Empty<SurvivorData>();
 }
 
+// 부상 구간(최대 HP 대비 비율). normalMinHpFraction 이상 정상, lightMinHpFraction 이상 경상, 그 아래는 중상, 0은 사망이다.
+// lightEfficiency는 경상의 전투·작업·탐사 효율이다(V2-IMPL-07).
+[Serializable]
+public sealed class InjuryData
+{
+    public float normalMinHpFraction;
+    public float lightMinHpFraction;
+    public float lightEfficiency;
+}
+
+// 치료 1회. 소요 시간 = baseSeconds ÷ ((1 + speedPerWork × (Work - referenceWork)) × 담당자 효율).
+// healFraction은 최대 HP 대비 회복량이다.
+[Serializable]
+public sealed class TreatmentData
+{
+    public int cost;
+    public float healFraction;
+    public float baseSeconds;
+    public float referenceWork;
+    public float speedPerWork;
+}
+
 [Serializable]
 public sealed class BuildingStatData
 {

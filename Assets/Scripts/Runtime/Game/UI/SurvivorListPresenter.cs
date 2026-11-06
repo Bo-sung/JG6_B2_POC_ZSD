@@ -1,6 +1,6 @@
 using UnityEngine;
 
-// 생존자 목록 9행. 행을 누르면 선택하고, 사망·파견 인원은 구별해 표시한다.
+// 생존자 목록 9행. 행을 누르면 선택하고, 사망·파견·부상·치료 인원은 구별해 표시한다. 중상자도 눌러 내용을 볼 수 있다.
 // 행과 인원의 대응은 세션이 늘어난 뒤에도 유지되므로 클릭 시점의 인원을 본다.
 public sealed class SurvivorListPresenter
 {
@@ -40,7 +40,9 @@ public sealed class SurvivorListPresenter
             SurvivorState state = session.Units[index].State;
             string name = state.DisplayName + (state.IsNewJoin ? " · 신규" : "") + " · " + SurvivorLabels.Specialty(state.Specialty).Replace(" 특화", "");
             string hp = state.IsAlive ? $"HP {Mathf.CeilToInt(state.Hp)}/{Mathf.CeilToInt(state.MaxHp)}" : "HP 0";
-            view.Rows[index].Show(name, hp, (state.IsAway ? $"탐사 {Mathf.CeilToInt(session.ExpeditionRemaining(state.Id))}초" : SurvivorLabels.Status(state)), LookOf(state));
+            bool treating = session.IsTreating(state.Id);
+            string status = state.IsAway ? $"탐사 {Mathf.CeilToInt(session.ExpeditionRemaining(state.Id))}초" : treating ? "치료 중" : SurvivorLabels.Status(state);
+            view.Rows[index].Show(name, hp, status, LookOf(state), ConditionOf(state, treating));
         }
     }
 
@@ -54,6 +56,28 @@ public sealed class SurvivorListPresenter
         {
             return SurvivorRowView.Look.Away;
         }
-        return input.Selection.Contains(_state.Id) ? SurvivorRowView.Look.Selected : SurvivorRowView.Look.Normal;
+        if (input.Selection.Contains(_state.Id))
+        {
+            return SurvivorRowView.Look.Selected;
+        }
+        return _state.IsCritical ? SurvivorRowView.Look.Critical : SurvivorRowView.Look.Normal;
+    }
+
+    static SurvivorRowView.Condition ConditionOf(SurvivorState _state, bool _treating)
+    {
+        if (_treating)
+        {
+            return SurvivorRowView.Condition.Treating;
+        }
+        if (_state.IsAway)
+        {
+            return SurvivorRowView.Condition.None;
+        }
+        return _state.Injury switch
+        {
+            InjuryStatus.Light => SurvivorRowView.Condition.Light,
+            InjuryStatus.Critical => SurvivorRowView.Condition.Critical,
+            _ => SurvivorRowView.Condition.None,
+        };
     }
 }

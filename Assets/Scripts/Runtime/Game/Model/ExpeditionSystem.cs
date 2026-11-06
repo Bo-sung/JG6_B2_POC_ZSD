@@ -4,9 +4,10 @@ using System.Collections.Generic;
 public readonly struct ExpeditionMember
 {
     public readonly string id;
-    public readonly int exploration;
+    // 부상·특성 효율을 반영한 실효값이다. 파티 합은 TotalExploration으로만 구한다.
+    public readonly float exploration;
 
-    public ExpeditionMember(string _id, int _exploration)
+    public ExpeditionMember(string _id, float _exploration)
     {
         id = _id;
         exploration = _exploration;
@@ -28,8 +29,8 @@ public sealed class ActiveExpedition
         for (int index = 0; index < _members.Length; index++)
         {
             ids[index] = _members[index].id;
-            Exploration += _members[index].exploration;
         }
+        Exploration = ExpeditionSystem.TotalExploration(_members);
         party = Array.AsReadOnly(ids);
     }
 }
@@ -69,6 +70,17 @@ public sealed class ExpeditionSystem
             regions.Add(region.id, region);
         }
         Active = active.AsReadOnly();
+    }
+
+    // 실효 탐사의 합을 반올림한 파티 탐사 합(.5는 올림). 미리보기와 실제 판정이 이 값 하나를 쓴다.
+    public static int TotalExploration(IReadOnlyList<ExpeditionMember> _members)
+    {
+        double total = 0;
+        foreach (ExpeditionMember member in _members)
+        {
+            total += member.exploration;
+        }
+        return checked((int)Math.Round(total, MidpointRounding.AwayFromZero));
     }
 
     public bool TryStart(string _regionId, ExpeditionMember[] _members, out string _error)

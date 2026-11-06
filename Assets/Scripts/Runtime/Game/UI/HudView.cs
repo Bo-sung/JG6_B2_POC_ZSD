@@ -11,10 +11,14 @@ public sealed class HudView : MonoBehaviour
     [SerializeField] UnityEngine.UI.Text survivorText;
     // 방문 대기 중에만 켜지는 '방문자 도착' 항목.
     [SerializeField] UnityEngine.UI.Button visitorButton;
+    // 치료소 패널을 여는 항목. 진행 상태를 함께 보여 준다.
+    [SerializeField] UnityEngine.UI.Button treatmentButton;
+    [SerializeField] UnityEngine.UI.Text treatmentLabel;
 
     [SerializeField] UnityEngine.UI.Button[] speedButtons;
     public event System.Action<int> SpeedClicked;
     public event System.Action VisitorClicked;
+    public event System.Action TreatmentClicked;
 
     void Awake()
     {
@@ -24,6 +28,7 @@ public sealed class HudView : MonoBehaviour
             speedButtons[index].onClick.AddListener(() => SpeedClicked?.Invoke(option));
         }
         visitorButton.onClick.AddListener(() => VisitorClicked?.Invoke());
+        treatmentButton.onClick.AddListener(() => TreatmentClicked?.Invoke());
     }
 
     public void ShowSpeed(System.Collections.Generic.IReadOnlyList<float> _options, float _speed)
@@ -47,6 +52,11 @@ public sealed class HudView : MonoBehaviour
         scrapText.text = _scrap;
         coreText.text = _core;
         survivorText.text = _survivors;
+    }
+
+    public void ShowTreatment(string _label)
+    {
+        treatmentLabel.text = _label;
     }
 
     // 방문 대기 중에만 '방문자 도착' 항목을 켠다.
