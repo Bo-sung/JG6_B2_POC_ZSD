@@ -57,7 +57,7 @@
 | ID | 임시 결정 | 이유 | 변경 비용 |
 | --- | --- | --- | --- |
 | TD-20 | **Play 전체 검증은 G6에서 한다** (사용자 지시). 게이트마다 컴파일, EditMode, 코드 검토만 하고, UI를 바꾸면 5분 이내로 짧게 확인한다 | 병목을 줄인다. 대신 실제 플레이 문제는 G6에 몰린다 | 쉬움 |
-| TD-21 | **게이트 담당:** G2·G3 Opus. G4 `zcode -p`, 실패하면 pi GLM, 그다음 Gemini Flash. G5 pi GLM, 그다음 Gemini Flash. G6 Opus | 복잡한 규칙과 통합 판단에 High를 쓴다. G4는 사용자가 요청한 실험이다 | 쉬움 |
+| TD-21 | **게이트 담당:** G2·G3 Opus. G4 Gemini Flash(GLM 한도로 변경). G5 `zcode -p`, 실패하면 pi GLM, 그다음 Gemini Flash. G6 Opus | 복잡한 규칙과 통합 판단에 High를 쓴다. zcode는 사용자가 요청한 실험이고 pi와 GLM 한도를 공유한다 | 쉬움 |
 | TD-22 | **Medium fallback 순서:** `pi` GLM → `antigravity` `gemini-3.8-flash-medium` → `antigravity` Sonnet. 한도에 걸리면 기다리지 않고 다음 순위로 넘어간다 | 비용이 낮은 쪽을 먼저 쓴다 | 쉬움 |
 | TD-23 | 게이트당 커밋 1개 이상을 `feature/poc-v2`에 남기고 푸시하지 않는다. 워커는 커밋하지 않고 코디네이터가 검토 후 커밋한다 | 기존 방식과 같다 | 쉬움 |
 | TD-24 | 코디네이터는 검토에서 찾은 작은 결함을 워커에게 돌려보내지 않고 직접 고친다 | G1처럼 워커 한도에 걸려도 진행할 수 있다 | 쉬움 |
