@@ -1,28 +1,28 @@
 {
-  "status": "poc-initial",
-  "note": "POC 초기 밸런스. POC_CORE.md 4절의 제안값에서 시작하며 테스트로 조정한다.",
+  "status": "poc-tuned",
+  "note": "POC 초기값에서 전략 자동 실행으로 조정한 값. 조정 이력과 근거는 밸런스 보고서를 따른다.",
   "session": {
-    "prepSeconds": 100,
-    "alertSeconds": 10,
-    "combatSeconds": 100,
+    "prepSeconds": 140,
+    "alertSeconds": 6,
+    "combatSeconds": 120,
     "timeoutCoreDamagePerEnemy": 15,
     "startScrap": 8,
     "defaultSeed": 12345
   },
   "core": {
-    "maxHp": 300
+    "maxHp": 500
   },
   "production": {
     "maxWorkers": 2,
-    "scrapPerSecondPerWork": 0.0133
+    "scrapPerSecondPerWork": 0.011
   },
   "survivorCombat": {
     "moveSpeed": 3,
-    "attackRange": 12,
+    "attackRange": 10,
     "attackInterval": 1,
-    "baseDamage": 4,
-    "damagePerCombat": 4,
-    "towerRangeBonus": 6,
+    "baseDamage": 3,
+    "damagePerCombat": 3,
+    "towerRangeBonus": 5,
     "towerDamageMultiplier": 1.5
   },
   "survivors": [
@@ -37,15 +37,15 @@
   "buildings": {
     "gridSize": 2,
     "wall": { "cost": 4, "maxHp": 120 },
-    "tower": { "cost": 8, "maxHp": 200 }
+    "tower": { "cost": 8, "maxHp": 150 }
   },
   "enemies": [
-    { "id": "basic", "displayName": "기본형", "maxHp": 60, "moveSpeed": 2.5, "attackRange": 1.8, "attackInterval": 1, "damage": 6, "buildingDamageMultiplier": 1, "aggroRange": 7 },
-    { "id": "breaker", "displayName": "돌파형", "maxHp": 100, "moveSpeed": 2, "attackRange": 1.8, "attackInterval": 1, "damage": 6, "buildingDamageMultiplier": 5, "aggroRange": 4 }
+    { "id": "basic", "displayName": "기본형", "maxHp": 150, "moveSpeed": 2.5, "attackRange": 1.8, "attackInterval": 1, "damage": 8, "buildingDamageMultiplier": 1, "aggroRange": 7 },
+    { "id": "breaker", "displayName": "돌파형", "maxHp": 260, "moveSpeed": 2.3, "attackRange": 1.8, "attackInterval": 1, "damage": 8, "buildingDamageMultiplier": 5, "aggroRange": 4 }
   ],
   "waves": [
     {
-      "spawnInterval": 0.8,
+      "spawnInterval": 1.5,
       "spawns": [
         { "enemyId": "basic", "lane": "west", "count": 3 },
         { "enemyId": "basic", "lane": "east", "count": 2 }
@@ -61,12 +61,12 @@
       ]
     },
     {
-      "spawnInterval": 0.7,
+      "spawnInterval": 0.4,
       "spawns": [
-        { "enemyId": "basic", "lane": "west", "count": 4 },
-        { "enemyId": "basic", "lane": "east", "count": 4 },
-        { "enemyId": "breaker", "lane": "west", "count": 2 },
-        { "enemyId": "breaker", "lane": "east", "count": 1 }
+        { "enemyId": "basic", "lane": "west", "count": 2 },
+        { "enemyId": "basic", "lane": "east", "count": 6 },
+        { "enemyId": "breaker", "lane": "west", "count": 1 },
+        { "enemyId": "breaker", "lane": "east", "count": 2 }
       ]
     }
   ],
@@ -74,7 +74,7 @@
     {
       "id": "near",
       "displayName": "근거리",
-      "durationSeconds": 70,
+      "durationSeconds": 80,
       "minParty": 1,
       "maxParty": 3,
       "riskLabel": "낮음",
@@ -83,14 +83,14 @@
       "rewardChancePerExploration": 0.03,
       "rewardBase": 2,
       "rewardPerExploration": 0.5,
-      "deathChanceBase": 0.12,
-      "deathChancePerExploration": -0.01,
-      "deathChancePerExtraMember": -0.02
+      "deathChanceBase": 0.16,
+      "deathChancePerExploration": -0.008,
+      "deathChancePerExtraMember": -0.01
     },
     {
       "id": "far",
       "displayName": "원거리",
-      "durationSeconds": 150,
+      "durationSeconds": 170,
       "minParty": 1,
       "maxParty": 3,
       "riskLabel": "높음",
