@@ -60,7 +60,7 @@ public sealed class EnemyUnit : MonoBehaviour
 
     void Update()
     {
-        if (data == null || halted || !agent.isOnNavMesh)
+        if (data == null || IsDead || halted || !agent.isOnNavMesh)
         {
             return;
         }

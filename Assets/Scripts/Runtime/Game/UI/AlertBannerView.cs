@@ -8,6 +8,7 @@ public sealed class AlertBannerView : MonoBehaviour
     [SerializeField] UnityEngine.UI.Text alertText;
     [SerializeField] GameObject noticeRoot;
     [SerializeField] UnityEngine.UI.Text noticeText;
+    // 알림 가독성을 위한 표시 시간이며 게임 밸런스 값이 아니다.
     [SerializeField] float noticeSeconds = 4f;
 
     public float NoticeSeconds => noticeSeconds;

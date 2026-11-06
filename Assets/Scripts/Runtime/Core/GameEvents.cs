@@ -120,11 +120,13 @@ public static class GameEvents
         public readonly BuildingType type;
         public readonly Vector3 position;
         public readonly int cost;
-        public BuildingInfo(BuildingType _type, Vector3 _position, int _cost)
+        public readonly string id;
+        public BuildingInfo(BuildingType _type, Vector3 _position, int _cost, string _id = null)
         {
             type = _type;
             position = _position;
             cost = _cost;
+            id = _id;
         }
     }
     public readonly struct WaveStartInfo
@@ -175,7 +177,7 @@ public static class GameEvents
     public static void RaiseAssignmentChanged(string _survivorId, string _work, string _defense) => Emit(AssignmentChanged, new AssignmentInfo(_survivorId, _work, _defense));
     public static void RaiseExpeditionStarted(string _regionId, string[] _party) => Emit(ExpeditionStarted, new ExpeditionStartInfo(_regionId, _party));
     public static void RaiseExpeditionResolved(string _regionId, int _reward, string[] _casualties, string[] _returned) => Emit(ExpeditionResolved, new ExpeditionResultInfo(_regionId, _reward, _casualties, _returned));
-    public static void RaiseBuildingPlaced(BuildingType _type, Vector3 _position, int _cost) => Emit(BuildingPlaced, new BuildingInfo(_type, _position, _cost));
+    public static void RaiseBuildingPlaced(BuildingType _type, Vector3 _position, int _cost, string _id = null) => Emit(BuildingPlaced, new BuildingInfo(_type, _position, _cost, _id));
     public static void RaiseWaveStarted(int _waveIndex) => Emit(WaveStarted, new WaveStartInfo(_waveIndex));
     public static void RaiseWaveEnded(int _waveIndex, float _coreHp, int _alive, int _scrap) => Emit(WaveEnded, new WaveEndInfo(_waveIndex, _coreHp, _alive, _scrap));
     public static void RaiseSurvivorDied(string _survivorId, string _cause) => Emit(SurvivorDied, new SurvivorDeathInfo(_survivorId, _cause));

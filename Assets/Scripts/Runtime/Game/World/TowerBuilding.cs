@@ -9,7 +9,12 @@ public sealed class TowerBuilding : BuildingBase, ICombatStation
     SurvivorCombatData combat;
 
     public override BuildingType Type => BuildingType.Tower;
-    public string StationId => GetInstanceID().ToString();
+    public string StationId { get; private set; }
+
+    public void SetStationId(string _id)
+    {
+        StationId = _id;
+    }
     public Vector3 StationPosition => approach.position;
     public Vector3 SeatPosition => seat.position;
     public float RangeBonus => combat.towerRangeBonus;

@@ -148,6 +148,42 @@ public sealed class ExpeditionPanelTests
     [TestCase(150, 100, "이번 경보·전투 중")]
     public void ReturnEstimateComparesRemainingPrep(float _duration, float _remaining, string _expected)
     {
-        Assert.That(ExpeditionLabels.ReturnTiming(_duration, SessionPhase.Prep, _remaining), Does.Contain(_expected));
+        var timing = TableManager.Instance.Gameplay.session;
+        Assert.That(ExpeditionLabels.ReturnTiming(_duration, SessionPhase.Prep, _remaining, timing.alertSeconds, timing.combatSeconds), Does.Contain(_expected));
+    }
+
+    [Test]
+    public void SingleMemberShowsActualPayoutChance()
+    {
+        Click("MemberClicked", 0);
+        presenter.Refresh();
+        var region = TableManager.Instance.Gameplay.expeditions[0];
+        float payoutChance = session.Expeditions.RewardChance(region.id, states[0].Exploration)
+            * (1 - session.Expeditions.DeathChance(region.id, states[0].Exploration, 1));
+        Assert.That(preview.text, Does.Contain($"지급 확률 {payoutChance:P1}"));
+        Click("MemberClicked", 1);
+        presenter.Refresh();
+        float rewardChance = session.Expeditions.RewardChance(region.id, states[0].Exploration + states[1].Exploration);
+        Assert.That(preview.text, Does.Contain($"지급 확률 {rewardChance:P1}"));
+    }
+
+    [Test]
+    public void ReturnEstimateUsesFinalTableBoundaries()
+    {
+        var table = TableManager.Instance.Gameplay;
+        foreach (var region in table.expeditions)
+        {
+            float remaining = region.durationSeconds - table.session.alertSeconds - table.session.combatSeconds;
+            if (remaining < 0)
+            {
+                continue;
+            }
+            Assert.That(ExpeditionLabels.ReturnTiming(region.durationSeconds, SessionPhase.Prep, remaining,
+                table.session.alertSeconds, table.session.combatSeconds), Does.Contain("이번 경보·전투 중"));
+            Assert.That(ExpeditionLabels.ReturnTiming(region.durationSeconds, SessionPhase.Prep, remaining - 0.01f,
+                table.session.alertSeconds, table.session.combatSeconds), Does.Contain("다음 준비 이후"));
+            Assert.That(ExpeditionLabels.ReturnTiming(region.durationSeconds, SessionPhase.Prep, region.durationSeconds,
+                table.session.alertSeconds, table.session.combatSeconds), Does.Contain("이번 준비 중"));
+        }
     }
 }

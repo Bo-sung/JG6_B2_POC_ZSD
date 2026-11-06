@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
 // 쿼터뷰 카메라. 리그는 바닥에서 팬하고, 경사각과 방향은 씬에 배치한 값으로 고정한다.
@@ -16,6 +18,7 @@ public sealed class CameraRig : MonoBehaviour
 
     Vector3 viewDirection;
     float distance;
+    readonly List<RaycastResult> uiHits = new List<RaycastResult>();
 
     void Awake()
     {
@@ -72,6 +75,17 @@ public sealed class CameraRig : MonoBehaviour
         if (mouse == null)
         {
             return;
+        }
+        EventSystem system = EventSystem.current;
+        if (system)
+        {
+            var pointer = new PointerEventData(system) { position = mouse.position.ReadValue() };
+            uiHits.Clear();
+            system.RaycastAll(pointer, uiHits);
+            if (uiHits.Count > 0)
+            {
+                return;
+            }
         }
         float scroll = mouse.scroll.ReadValue().y;
         if (Mathf.Approximately(scroll, 0))

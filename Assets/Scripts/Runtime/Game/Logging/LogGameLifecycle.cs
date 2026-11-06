@@ -17,7 +17,7 @@ public sealed class LogGameLifecycle : MonoBehaviour
         GameEvents.SurvivorDied += OnSurvivorDied;
         GameEvents.WaveEnded += OnWaveEnded;
         GameEvents.SessionEnded += OnSessionEnded;
-        LogKitSetup.BeforeShutdown += Close;
+        LogKitSetup.BeforeShutdown += EndForQuit;
     }
 
     void OnDisable()
@@ -31,8 +31,8 @@ public sealed class LogGameLifecycle : MonoBehaviour
         GameEvents.SurvivorDied -= OnSurvivorDied;
         GameEvents.WaveEnded -= OnWaveEnded;
         GameEvents.SessionEnded -= OnSessionEnded;
-        LogKitSetup.BeforeShutdown -= Close;
-        Close();
+        LogKitSetup.BeforeShutdown -= EndForQuit;
+        EndForQuit();
     }
 
     void FixedUpdate()
@@ -90,7 +90,7 @@ public sealed class LogGameLifecycle : MonoBehaviour
                     { "x", _info.position.x }, { "y", _info.position.y }, { "z", _info.position.z }
                 }
             },
-            { "cost", _info.cost }
+            { "cost", _info.cost }, { "id", _info.id }
         });
     }
 
@@ -126,6 +126,11 @@ public sealed class LogGameLifecycle : MonoBehaviour
     void Close()
     {
         session?.Close();
+    }
+
+    void EndForQuit()
+    {
+        OnSessionEnded(new GameEvents.SessionEndInfo(SessionResult.None, "quit"));
     }
 }
 

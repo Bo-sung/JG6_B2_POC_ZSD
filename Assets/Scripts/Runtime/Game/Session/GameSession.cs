@@ -65,6 +65,8 @@ public sealed class GameSession : MonoBehaviour
     AssignmentBoard board;
     ExpeditionSystem expeditions;
     int seed;
+    int buildingSequence;
+    readonly Dictionary<string, (WorkAssignment work, DefenseAssignment defense)> loggedAssignments = new Dictionary<string, (WorkAssignment, DefenseAssignment)>();
     readonly List<SurvivorState> survivors = new List<SurvivorState>();
     readonly Dictionary<string, SurvivorUnit> unitsById = new Dictionary<string, SurvivorUnit>(StringComparer.Ordinal);
     readonly List<BuildingBase> buildings = new List<BuildingBase>();
@@ -176,9 +178,18 @@ public sealed class GameSession : MonoBehaviour
         board = new AssignmentBoard(table.production.maxWorkers);
         expeditions = new ExpeditionSystem(table.expeditions, rng.For(STREAM_EXPEDITION));
         core.Initialize(table.core.maxHp);
-        production.Initialize();
+        BindProduction();
         waveDirector.Initialize(this, rng.For(STREAM_WAVE));
         BindSurvivors();
+    }
+
+    void BindProduction()
+    {
+        if (production.SlotCount < table.production.maxWorkers)
+        {
+            throw new InvalidOperationException("씬의 생산 작업 슬롯 수가 테이블의 maxWorkers보다 적습니다.");
+        }
+        production.Initialize();
     }
 
     void OnEnable()
@@ -396,7 +407,7 @@ public sealed class GameSession : MonoBehaviour
         {
             if (unit.State.CanAct)
             {
-                unit.Hold();
+                unit.Halt();
             }
         }
         GameEvents.RaisePhaseChanged(flow.Phase, flow.WaveNumber);
@@ -580,6 +591,13 @@ public sealed class GameSession : MonoBehaviour
     void RaiseAssignment(string _id)
     {
         DefenseAssignment defense = board.DefenseOf(_id);
+        WorkAssignment work = board.WorkOf(_id);
+        if (loggedAssignments.TryGetValue(_id, out var previous) && previous.work == work
+            && previous.defense.x == defense.x && previous.defense.z == defense.z && previous.defense.towerId == defense.towerId)
+        {
+            return;
+        }
+        loggedAssignments[_id] = (work, defense);
         string spot = defense.IsTower ? "tower:" + defense.towerId : FormattableString.Invariant($"{defense.x:0.#},{defense.z:0.#}");
         GameEvents.RaiseAssignmentChanged(_id, board.WorkOf(_id).ToString(), spot);
     }
@@ -626,8 +644,17 @@ public sealed class GameSession : MonoBehaviour
 
     void TickExpeditions(float _deltaTime)
     {
-        foreach (ExpeditionOutcome outcome in expeditions.Tick(_deltaTime))
+        foreach (ExpeditionOutcome rolled in expeditions.Tick(_deltaTime))
         {
+            var returned = new List<string>();
+            foreach (string id in rolled.returned)
+            {
+                if (FindUnit(id).State.IsAlive)
+                {
+                    returned.Add(id);
+                }
+            }
+            var outcome = new ExpeditionOutcome(rolled.regionId, returned.Count > 0 ? rolled.reward : 0, rolled.casualties, returned.ToArray());
             expeditionHistory.Add(outcome);
             expeditionsThisWave.Add(outcome);
             economy.Add(outcome.reward);
@@ -689,6 +716,10 @@ public sealed class GameSession : MonoBehaviour
     void ReturnFromExpedition(string _id)
     {
         SurvivorUnit unit = FindUnit(_id);
+        if (!unit.State.IsAlive)
+        {
+            return;
+        }
         unit.EndAway(returnPoint.position);
         if (board.ResolveReturn(_id))
         {
@@ -723,9 +754,14 @@ public sealed class GameSession : MonoBehaviour
         }
         _building = Instantiate(prefab, snapped, _rotation, buildingRoot);
         _building.Initialize(stat);
+        string buildingId = (++buildingSequence).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (_building is TowerBuilding tower)
+        {
+            tower.SetStationId(buildingId);
+        }
         buildings.Add(_building);
         _error = null;
-        GameEvents.RaiseBuildingPlaced(_type, snapped, stat.cost);
+        GameEvents.RaiseBuildingPlaced(_type, snapped, stat.cost, buildingId);
         return true;
     }
 

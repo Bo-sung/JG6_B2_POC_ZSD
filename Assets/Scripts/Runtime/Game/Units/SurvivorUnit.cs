@@ -38,6 +38,14 @@ public sealed class SurvivorUnit : MonoBehaviour
     float nextRepathTime;
     float nextFireTime;
     float tracerEndTime;
+    bool halted;
+
+    public void Halt()
+    {
+        Hold();
+        halted = true;
+        tracer.enabled = false;
+    }
 
     public SurvivorState State { get; private set; }
     public bool AtWorkSlot => State.Activity == SurvivorActivity.Working && arrived;
@@ -116,7 +124,7 @@ public sealed class SurvivorUnit : MonoBehaviour
         {
             tracer.enabled = false;
         }
-        if (State == null || !State.CanAct)
+        if (State == null || !State.CanAct || halted)
         {
             return;
         }

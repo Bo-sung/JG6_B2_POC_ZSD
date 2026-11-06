@@ -71,10 +71,16 @@ public sealed class ExpeditionPanelPresenter
             string duty = !state.IsAlive ? "사망" : state.IsAway ? $"탐사 {Mathf.CeilToInt(session.ExpeditionRemaining(state.Id))}초" : SurvivorLabels.Work(session.Assignments.WorkOf(state.Id));
             view.ShowMember(index, $"{(chosen ? "[선택]" : "[  ]")} {state.DisplayName} · 탐사 {state.Exploration} · {duty}", state.CanAct);
         }
+        float rewardChance = session.Expeditions.RewardChance(region.id, exploration);
+        if (selected.Count == 1)
+        {
+            rewardChance *= 1 - session.Expeditions.DeathChance(region.id, exploration, selected.Count);
+        }
         string prediction = selected.Count > 0
-            ? $"위험 {region.riskLabel} · 최대 1명 사망 {session.Expeditions.DeathChance(region.id, exploration, selected.Count):P1}\n보상 성공 시 {session.Expeditions.ExpectedReward(region.id, exploration)} 스크랩 · 확률 {session.Expeditions.RewardChance(region.id, exploration):P1}"
+            ? $"위험 {region.riskLabel} · 최대 1명 사망 {session.Expeditions.DeathChance(region.id, exploration, selected.Count):P1}\n보상 성공 시 {session.Expeditions.ExpectedReward(region.id, exploration)} 스크랩 · 지급 확률 {rewardChance:P1}"
             : $"위험 {region.riskLabel} · 인원을 선택하면 확률·보상을 표시합니다.";
-        string preview = $"{region.displayName} · {selected.Count}/{region.maxParty}명 · 탐사 합 {exploration}\n소요 {region.durationSeconds:0}초 · {ExpeditionLabels.ReturnTiming(region.durationSeconds, session.Phase, session.PhaseRemaining)}\n{prediction}";
+        var timing = TableManager.Instance.Gameplay.session;
+        string preview = $"{region.displayName} · {selected.Count}/{region.maxParty}명 · 탐사 합 {exploration}\n소요 {region.durationSeconds:0}초 · {ExpeditionLabels.ReturnTiming(region.durationSeconds, session.Phase, session.PhaseRemaining, timing.alertSeconds, timing.combatSeconds)}\n{prediction}";
         bool valid = selected.Count >= region.minParty && selected.Count <= region.maxParty;
         string status = !session.CanDispatch ? "준비 단계에만 파견할 수 있습니다." : !valid ? $"파견 인원 {region.minParty}~{region.maxParty}명을 선택하세요." : error ?? "생산·방어에서 제외 · *조기 종료 시 이월";
         var active = new StringBuilder("진행 중 탐사 · 휠로 목록 이동");

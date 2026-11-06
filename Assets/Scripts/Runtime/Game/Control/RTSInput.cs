@@ -72,7 +72,7 @@ public sealed class RTSInput : MonoBehaviour
             return;
         }
         Selection.Prune();
-        if (IsPickingDefense && !session.CanChangeDefense)
+        if (IsPickingDefense && (Selection.Count == 0 || !session.CanChangeDefense))
         {
             CancelDefensePick();
         }
@@ -149,6 +149,10 @@ public sealed class RTSInput : MonoBehaviour
 
     void ApplySelectionVisuals()
     {
+        if (Selection.Count == 0)
+        {
+            CancelDefensePick();
+        }
         foreach (SurvivorUnit unit in session.Units)
         {
             if (unit.State.CanAct)

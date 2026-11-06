@@ -107,6 +107,7 @@ public sealed class WaveDirector : MonoBehaviour
         {
             if (enemy)
             {
+                enemy.Halt();
                 Destroy(enemy.gameObject);
             }
         }

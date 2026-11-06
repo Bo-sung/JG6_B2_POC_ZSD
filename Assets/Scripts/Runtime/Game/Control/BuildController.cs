@@ -7,7 +7,13 @@ using UnityEngine.InputSystem;
 [DefaultExecutionOrder(-20)]
 public sealed class BuildController : MonoBehaviour
 {
-    public enum Mode { None, Wall, Tower, Repair }
+    public enum Mode
+    {
+        None,
+        Wall,
+        Tower,
+        Repair
+    }
 
     [SerializeField] GameSession session;
     [SerializeField] RTSInput input;
