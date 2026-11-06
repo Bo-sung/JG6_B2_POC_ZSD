@@ -72,12 +72,21 @@ public static class SurvivorLabels
 
     public static string Work(WorkAssignment _work) => _work == WorkAssignment.Production ? "생산" : "방어 대기";
 
-    // 특성 키의 표시 이름. 키 집합은 GameTableRules.TRAIT_KEYS와 같다. 효과는 G4에서 붙는다.
+    // 특성 키의 표시 이름. 키 집합은 GameTableRules.TRAIT_KEYS와 같다. 없으면 '없음'.
     public static string Trait(string _trait) => _trait switch
     {
         "marksman" => "사격 전문",
         "foreman" => "숙련 작업자",
         "scout" => "정찰 전문가",
+        _ => "없음",
+    };
+
+    // 선택 패널 표시용: 특성 이름과 효과. 없으면 '없음'(V2-IMPL-07, TD-44).
+    public static string TraitDescription(string _trait) => _trait switch
+    {
+        "marksman" => "사격 전문 (전투 효율 ×1.2)",
+        "foreman" => "숙련 작업자 (작업 효율 ×1.2)",
+        "scout" => "정찰 전문가 (탐사 효율 ×1.2 · 위험 ×0.8)",
         _ => "없음",
     };
 

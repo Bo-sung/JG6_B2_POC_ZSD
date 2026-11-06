@@ -38,14 +38,20 @@ public static class ExpeditionEventRules
         return (int)Math.Ceiling(_baseReward * _data.supply.bonusRewardFraction);
     }
 
-    public static float SearchDamageChance(ExpeditionEventData _data) => _data.supply.damageChance;
+    public static float SearchDamageChance(ExpeditionEventData _data, bool _hasScout = false)
+    {
+        float chance = _data.supply.damageChance;
+        return _hasScout ? chance * _data.scoutRiskMultiplier : chance;
+    }
 
     public static float SearchDamageFraction(ExpeditionEventData _data) => _data.supply.damageFraction;
 
     // 파티 실효 전투 합이 높을수록 피해 비율이 줄고 최소 비율 아래로는 내려가지 않는다(TD-33).
-    public static float EncounterDamageFraction(ExpeditionEventData _data, float _totalCombat)
+    // scout은 조우 피해 비율에 ×0.8을 곱한다(TD-44).
+    public static float EncounterDamageFraction(ExpeditionEventData _data, float _totalCombat, bool _hasScout = false)
     {
         float fraction = _data.encounter.damageMaxFraction - _data.encounter.damageReductionPerCombat * _totalCombat;
-        return Math.Max(_data.encounter.damageMinFraction, Math.Min(_data.encounter.damageMaxFraction, fraction));
+        float clamped = Math.Max(_data.encounter.damageMinFraction, Math.Min(_data.encounter.damageMaxFraction, fraction));
+        return _hasScout ? clamped * _data.scoutRiskMultiplier : clamped;
     }
 }

@@ -15,6 +15,7 @@ public sealed class GameplayTableData
     public SurvivorCombatData survivorCombat;
     public SurvivorData[] survivors = Array.Empty<SurvivorData>();
     public RecruitmentData recruitment;
+    public ExperienceData experience;
     public InjuryData injury;
     public TreatmentData treatment;
     public BuildingsData buildings;

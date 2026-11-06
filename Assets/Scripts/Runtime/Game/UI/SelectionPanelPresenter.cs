@@ -73,9 +73,13 @@ public sealed class SelectionPanelPresenter
     {
         SurvivorState state = _unit.State;
         bool treating = session.IsTreating(state.Id);
+        string combatProg = session.Experience != null ? session.Experience.FormatStatProgress("전투", state.Combat, StatType.Combat, state.Id) : $"전투 {state.Combat}";
+        string workProg = session.Experience != null ? session.Experience.FormatStatProgress("작업", state.Work, StatType.Work, state.Id) : $"작업 {state.Work}";
+        string expProg = session.Experience != null ? session.Experience.FormatStatProgress("탐사", state.Exploration, StatType.Exploration, state.Id) : $"탐사 {state.Exploration}";
+        string traitDesc = SurvivorLabels.TraitDescription(state.Trait);
         view.Show(
             $"{state.DisplayName} · {SurvivorLabels.Specialty(state.Specialty)}  HP {Mathf.CeilToInt(state.Hp)}/{Mathf.CeilToInt(state.MaxHp)} · {SurvivorLabels.Condition(state, treating)}",
-            $"전투 {state.Combat}   작업 {state.Work}   탐사 {state.Exploration}\n사거리 {_unit.AttackRange:0.0}m · 초당 피해 {_unit.DamagePerSecond:0.#}",
+            $"{combatProg}   {workProg}   {expProg}\n특성: {traitDesc}\n사거리 {_unit.AttackRange:0.0}m · 초당 피해 {_unit.DamagePerSecond:0.#}",
             $"작업 배정: {SurvivorLabels.Work(session.Assignments.WorkOf(state.Id))}",
             $"방어 배정: {SurvivorLabels.Defense(session.Assignments.DefenseOf(state.Id), session.Assignments.IsDefenseAssigned(state.Id))}",
             $"현재 행동: {SurvivorLabels.Action(_unit)}",

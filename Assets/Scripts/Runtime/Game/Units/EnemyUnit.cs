@@ -25,6 +25,7 @@ public sealed class EnemyUnit : MonoBehaviour
     [SerializeField] float sightHeight = 1.5f;
 
     readonly Collider[] targetBuffer = new Collider[TARGET_BUFFER_SIZE];
+    readonly System.Collections.Generic.HashSet<string> damagerIds = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
     NavMeshAgent agent;
     NavMeshPath path;
     EnemyData data;
@@ -84,13 +85,24 @@ public sealed class EnemyUnit : MonoBehaviour
 
     public void ApplyDamage(float _amount)
     {
+        ApplyDamage(_amount, null);
+    }
+
+    public void ApplyDamage(float _amount, SurvivorUnit _attacker)
+    {
         if (IsDead)
         {
             return;
         }
+        if (_attacker != null && _amount > 0 && _attacker.State != null && _attacker.State.IsAlive)
+        {
+            damagerIds.Add(_attacker.State.Id);
+            session?.Experience?.RecordCombatHit(_attacker.State.Id);
+        }
         hp -= _amount;
         if (IsDead)
         {
+            session?.Experience?.RecordEnemyKilled(damagerIds);
             Destroy(gameObject);
         }
     }

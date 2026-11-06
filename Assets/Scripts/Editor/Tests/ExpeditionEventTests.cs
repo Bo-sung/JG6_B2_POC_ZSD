@@ -939,6 +939,17 @@ public sealed class ExpeditionEventTests
 
     // ── 조우 ──
     [Test]
+    public void ContinuingAfterEncounterIsNotASelectionResponse()
+    {
+        BuildSession(_regions: QuietRegions(_death: 0));
+        ActiveExpedition expedition = Dispatch("s1", "s2");
+        Raise(ExpeditionEventType.Encounter);
+        Assert.That(session.TryResolveExpeditionEvent(expedition.expeditionId, ExpeditionDecision.Continue, out _), Is.True);
+        Assert.That(expedition.RespondedToEvent, Is.False, "조우 뒤 임무 계속으로 선택 사건 보너스를 받지 않는다.");
+        Assert.That(expedition.HadEncounter, Is.True);
+    }
+
+    [Test]
     public void EncounterResolvesOnArrivalWithDamageAndDelayThenOffersWithdraw()
     {
         BuildSession(_regions: QuietRegions(_death: 0));

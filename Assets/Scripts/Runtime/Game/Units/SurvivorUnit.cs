@@ -150,6 +150,26 @@ public sealed class SurvivorUnit : MonoBehaviour
     Vector3 FiringOrigin => OccupiedTower ? OccupiedTower.SeatPosition : transform.position;
     public float AttackRange => GameTableRules.SurvivorRange(combat, State.Combat, ActiveStation != null ? ActiveStation.RangeBonus : 0);
 
+    void OnEnable()
+    {
+        GameEvents.StatImproved += OnStatImproved;
+        // 파견 중에는 꺼져 있어 이벤트를 받지 못한다. 돌아오면 그동안의 성장을 반영한다.
+        RefreshGrowthVisuals();
+    }
+
+    void OnDisable()
+    {
+        GameEvents.StatImproved -= OnStatImproved;
+    }
+
+    void OnStatImproved(GameEvents.StatImprovedInfo _info)
+    {
+        if (State != null && State.Id == _info.id)
+        {
+            RefreshGrowthVisuals();
+        }
+    }
+
     // GameSession.Awake에서 호출되므로 이 컴포넌트의 Awake 순서에 기대지 않는다.
     public void Bind(SurvivorState _state, SurvivorCombatData _combat)
     {
@@ -160,6 +180,22 @@ public sealed class SurvivorUnit : MonoBehaviour
         State = _state;
         combat = _combat;
         agent.speed = _combat.moveSpeed;
+        nameLabel.SetText(_state.DisplayName);
+        if (defenseMarker)
+        {
+            defenseMarker.SetLabel(_state.DisplayName);
+        }
+        SetSelected(false);
+        RefreshGrowthVisuals();
+    }
+
+    // 성장 후 몸체 색(전문 분야)과 무기 크기를 다시 적용한다(V2-IMPL-14). 표식 범위는 GameSession이 배정 기준으로 갱신한다.
+    void RefreshGrowthVisuals()
+    {
+        if (State == null || combat == null)
+        {
+            return;
+        }
         var tint = new MaterialPropertyBlock();
         Color color = State.Specialty switch
         {
@@ -169,12 +205,15 @@ public sealed class SurvivorUnit : MonoBehaviour
             _ => generalColor,
         };
         tint.SetColor("_BaseColor", color);
-        bodyRenderer.SetPropertyBlock(tint);
-        weapon.localScale = new Vector3(weaponWidthPerCombat * State.Combat, weaponWidthPerCombat * State.Combat, weaponLengthPerCombat * State.Combat);
-        weapon.localPosition = new Vector3(weaponSideOffset, 0, weapon.localScale.z * 0.5f);
-        nameLabel.SetText(_state.DisplayName);
-        defenseMarker.SetLabel(_state.DisplayName);
-        SetSelected(false);
+        if (bodyRenderer)
+        {
+            bodyRenderer.SetPropertyBlock(tint);
+        }
+        if (weapon)
+        {
+            weapon.localScale = new Vector3(weaponWidthPerCombat * State.Combat, weaponWidthPerCombat * State.Combat, weaponLengthPerCombat * State.Combat);
+            weapon.localPosition = new Vector3(weaponSideOffset, 0, weapon.localScale.z * 0.5f);
+        }
     }
 
     void Update()
@@ -587,6 +626,6 @@ public sealed class SurvivorUnit : MonoBehaviour
         tracer.SetPosition(1, _enemy.transform.position + Vector3.up * sightHeight);
         tracer.enabled = true;
         tracerEndTime = Time.time + tracerSeconds;
-        _enemy.ApplyDamage(damage);
+        _enemy.ApplyDamage(damage, this);
     }
 }

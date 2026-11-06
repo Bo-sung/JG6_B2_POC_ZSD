@@ -16,8 +16,9 @@ public readonly struct WaveSummary
     public readonly ExpeditionOutcome[] expeditions;
     public readonly int destroyedBuildings;
     public readonly int damagedBuildings;
+    public readonly string[] growths;
 
-    public WaveSummary(int _waveNumber, float _coreHp, int _alive, int _scrap, string[] _deaths, int _timedOutEnemies, float _timeoutDamage, ExpeditionOutcome[] _expeditions = null, int _destroyedBuildings = 0, int _damagedBuildings = 0)
+    public WaveSummary(int _waveNumber, float _coreHp, int _alive, int _scrap, string[] _deaths, int _timedOutEnemies, float _timeoutDamage, ExpeditionOutcome[] _expeditions = null, int _destroyedBuildings = 0, int _damagedBuildings = 0, string[] _growths = null)
     {
         waveNumber = _waveNumber;
         coreHp = _coreHp;
@@ -29,6 +30,7 @@ public readonly struct WaveSummary
         expeditions = _expeditions ?? Array.Empty<ExpeditionOutcome>();
         destroyedBuildings = _destroyedBuildings;
         damagedBuildings = _damagedBuildings;
+        growths = _growths ?? Array.Empty<string>();
     }
 }
 
@@ -81,6 +83,7 @@ public sealed class GameSession : MonoBehaviour
     AssignmentBoard board;
     ExpeditionSystem expeditions;
     RecruitmentSystem recruitment;
+    ExperienceTracker experienceTracker;
     // Awake가 테이블 값으로 교체한다. 그 전에도 '치료 없음'으로 읽을 수 있게 비어 있는 시스템을 둔다.
     TreatmentSystem treatment = new TreatmentSystem(null);
     int seed;
@@ -126,6 +129,7 @@ public sealed class GameSession : MonoBehaviour
         }
     }
     readonly List<string> deathsThisWave = new List<string>();
+    readonly List<string> growthsThisWave = new List<string>();
 
     public int Seed => seed;
     public SessionPhase Phase => flow.Phase;
@@ -145,6 +149,7 @@ public sealed class GameSession : MonoBehaviour
     public ExpeditionSystem Expeditions => expeditions;
     public RecruitmentSystem Recruitment => recruitment;
     public TreatmentSystem Treatment => treatment;
+    public ExperienceTracker Experience => experienceTracker;
     // 지금 치료가 진행 중인 인원. 일시정지 중에는 방어 등 다른 행동을 하므로 false다.
     public bool IsTreating(string _id) => treatment.Involves(_id) && !treatment.Current.IsPaused;
     public ResourceEconomy Economy => economy;
@@ -237,6 +242,7 @@ public sealed class GameSession : MonoBehaviour
         board = new AssignmentBoard(table.production.maxWorkers, treatment.Involves);
         expeditions = new ExpeditionSystem(table.expeditions, rng.For(STREAM_EXPEDITION), table.expeditionEvents, rng.For(STREAM_EXPEDITION_EVENT));
         recruitment = new RecruitmentSystem(table.recruitment, rng.For(STREAM_RECRUIT));
+        experienceTracker = new ExperienceTracker(table.experience, _id => FindUnit(_id)?.State);
         core.Initialize(table.core.maxHp);
         BindProduction();
         BindInfirmary();
@@ -266,11 +272,26 @@ public sealed class GameSession : MonoBehaviour
     void OnEnable()
     {
         GameEvents.SurvivorDied += OnSurvivorDied;
+        GameEvents.StatImproved += OnStatImproved;
     }
 
     void OnDisable()
     {
         GameEvents.SurvivorDied -= OnSurvivorDied;
+        GameEvents.StatImproved -= OnStatImproved;
+    }
+
+    void OnStatImproved(GameEvents.StatImprovedInfo _info)
+    {
+        SurvivorUnit unit = FindUnit(_info.id);
+        string name = unit != null && unit.State != null ? unit.State.DisplayName : _info.id;
+        string statName = ExperienceTracker.StatDisplayName(TraitRules.ParseStat(_info.stat));
+        growthsThisWave.Add($"{name} {statName} {_info.old}→{_info.@new}");
+        // 사거리가 바뀌었다. 감시탑 보너스와 범위 중심은 배정에서 계산해야 맞는다.
+        if (unit != null)
+        {
+            RefreshDefenseMarker(unit);
+        }
     }
 
     // LogGameLifecycle이 OnEnable에서 구독한 뒤에 발행한다.
@@ -303,6 +324,13 @@ public sealed class GameSession : MonoBehaviour
         if (SessionFlow.ProducesScrap(flow.Phase))
         {
             economy.TickProduction(_deltaTime, ActiveWork());
+            foreach (SurvivorUnit unit in units)
+            {
+                if (unit.AtWorkSlot)
+                {
+                    experienceTracker?.TickWorkTime(unit.State.Id, _deltaTime);
+                }
+            }
         }
         if (flow.Phase == SessionPhase.Prep)
         {
@@ -349,7 +377,7 @@ public sealed class GameSession : MonoBehaviour
         }
         for (int index = 0; index < roster.Length; index++)
         {
-            RegisterSurvivor(new SurvivorState(roster[index], _injury: table.injury), placed[index], defaultDefensePoints[index].position);
+            RegisterSurvivor(new SurvivorState(roster[index], _injury: table.injury, _traitMultiplier: table.experience.traitMultiplier), placed[index], defaultDefensePoints[index].position);
         }
         // 첫 준비에서 바로 고민할 수 있도록 작업 능력이 높은 순으로 생산 시설을 채운다. 플레이어가 바꿀 수 있다.
         var byWork = new List<SurvivorState>(survivors);
@@ -364,8 +392,10 @@ public sealed class GameSession : MonoBehaviour
     void EnterPrep()
     {
         deathsThisWave.Clear();
+        growthsThisWave.Clear();
         expeditionsThisWave.Clear();
         destroyedThisWave = 0;
+        experienceTracker?.ResetWave();
         GameEvents.RaisePhaseChanged(flow.Phase, flow.WaveNumber);
         // 방문 웨이브의 준비가 시작하면 방문자가 도착한다(기준서 4.1A).
         VisitorRecord arrived = recruitment.ArriveVisitor(flow.WaveNumber);
@@ -460,7 +490,7 @@ public sealed class GameSession : MonoBehaviour
 
     void StoreSummary(int _timedOutEnemies, float _timeoutDamage)
     {
-        LastWave = new WaveSummary(flow.WaveNumber, core.Hp, AliveCount, economy.Scrap, deathsThisWave.ToArray(), _timedOutEnemies, _timeoutDamage, expeditionsThisWave.ToArray(), DestroyedThisWave, DamagedBuildings);
+        LastWave = new WaveSummary(flow.WaveNumber, core.Hp, AliveCount, economy.Scrap, deathsThisWave.ToArray(), _timedOutEnemies, _timeoutDamage, expeditionsThisWave.ToArray(), DestroyedThisWave, DamagedBuildings, growthsThisWave.ToArray());
     }
 
     // 결과 화면의 다음 버튼. 세 번째 웨이브 뒤에는 승리로 끝난다.
@@ -786,7 +816,7 @@ public sealed class GameSession : MonoBehaviour
                 _error = "파견할 수 없는 인원입니다.";
                 return false;
             }
-            members[index] = new ExpeditionMember(unit.State.Id, unit.State.EffectiveExploration);
+            members[index] = new ExpeditionMember(unit.State.Id, unit.State.EffectiveExploration, TraitRules.HasTrait(unit.State.Trait, TraitRules.SCOUT));
         }
         if (!expeditions.TryStart(_regionId, members, out _error))
         {
@@ -809,7 +839,8 @@ public sealed class GameSession : MonoBehaviour
         var members = new List<ExpeditionMember>();
         foreach (string id in _ids)
         {
-            members.Add(new ExpeditionMember(id, FindUnit(id).State.EffectiveExploration));
+            SurvivorUnit u = FindUnit(id);
+            members.Add(new ExpeditionMember(id, u.State.EffectiveExploration, TraitRules.HasTrait(u.State.Trait, TraitRules.SCOUT)));
         }
         return ExpeditionSystem.TotalExploration(members);
     }
@@ -860,7 +891,18 @@ public sealed class GameSession : MonoBehaviour
                     rescued = JoinSurvivor(rolled.rescued, RecruitmentSystem.SOURCE_RESCUE);
                 }
             }
-            var outcome = new ExpeditionOutcome(rolled.regionId, rolled.reward, rolled.casualties, rolled.returned, rolled.expeditionId, rolled.withdrawn, rescued != null ? rolled.rescued : null);
+            // 귀환 정산 살아 있는 인원에게 탐사 XP 지급(TD-43).
+            var livingReturned = new List<string>();
+            foreach (string id in rolled.returned)
+            {
+                if (IsSurvivorAlive(id))
+                {
+                    livingReturned.Add(id);
+                }
+            }
+            var expGrowths = new List<string>();
+            experienceTracker?.SettleExpedition(livingReturned, rolled.respondedToEvent, rolled.hadEncounter, rolled.withdrawn, expGrowths);
+            var outcome = new ExpeditionOutcome(rolled.regionId, rolled.reward, rolled.casualties, rolled.returned, rolled.expeditionId, rolled.withdrawn, rescued != null ? rolled.rescued : null, rolled.hadEncounter, rolled.respondedToEvent, expGrowths.ToArray());
             expeditionHistory.Add(outcome);
             expeditionsThisWave.Add(outcome);
             GameEvents.RaiseExpeditionResolved(outcome.regionId, outcome.reward, outcome.casualties, outcome.returned, outcome.expeditionId, outcome.withdrawn, rescued != null ? rescued.Id : null);
@@ -913,6 +955,10 @@ public sealed class GameSession : MonoBehaviour
         if (_decision == ExpeditionDecision.Act && current.Type == ExpeditionEventType.Rescue && !CheckRescueStart(current, out _error))
         {
             return false;
+        }
+        if (_decision != ExpeditionDecision.Timeout)
+        {
+            expedition.RespondedToEvent = true;
         }
         // 검사를 모두 지난 뒤에만 상태를 바꾼다. 여기서부터 이 사건은 해결이다.
         current.State = ExpeditionEventState.Resolved;
@@ -994,7 +1040,8 @@ public sealed class GameSession : MonoBehaviour
         ExpeditionEvent current = _expedition.Event;
         AddEventTime(_expedition, data.supply.extraSeconds);
         _expedition.BonusReward = ExpeditionEventRules.SearchBonus(data, expeditions.BaseRewardOf(_expedition, IsSurvivorAlive));
-        if (current.OutcomeRoll < ExpeditionEventRules.SearchDamageChance(data))
+        bool hasScout = PartyHasScout(_expedition);
+        if (current.OutcomeRoll < ExpeditionEventRules.SearchDamageChance(data, hasScout))
         {
             current.Outcome = ExpeditionEvent.OUTCOME_SEARCH_HURT;
             HurtPartyMember(_expedition, ExpeditionEventRules.SearchDamageFraction(data));
@@ -1010,11 +1057,13 @@ public sealed class GameSession : MonoBehaviour
     {
         ExpeditionEventData data = table.expeditionEvents;
         ExpeditionEvent current = _expedition.Event;
+        _expedition.HadEncounter = true;
         current.State = ExpeditionEventState.Resolved;
         current.Outcome = ExpeditionEvent.OUTCOME_ENCOUNTER;
         GameEvents.RaiseExpeditionEventDecided(_expedition.expeditionId, DECISION_FORCED);
         AddEventTime(_expedition, data.encounter.delaySeconds);
-        HurtPartyMember(_expedition, ExpeditionEventRules.EncounterDamageFraction(data, PartyCombat(LivingParty(_expedition))));
+        bool hasScout = PartyHasScout(_expedition);
+        HurtPartyMember(_expedition, ExpeditionEventRules.EncounterDamageFraction(data, PartyCombat(LivingParty(_expedition)), hasScout));
         GameEvents.RaiseExpeditionEventResolved(_expedition.expeditionId, current.Outcome);
         // 전멸이면 철수 기회 없이 이번 틱 끝에 정산된다.
         if (LivingParty(_expedition).Count > 0)
@@ -1074,7 +1123,24 @@ public sealed class GameSession : MonoBehaviour
     // 패널 표시와 실제 정산이 같은 값을 쓴다.
     public int BaseRewardOf(ActiveExpedition _expedition) => expeditions.BaseRewardOf(_expedition, IsSurvivorAlive);
 
-    public float ReturnDeathChanceOf(ActiveExpedition _expedition) => expeditions.DeathChanceOf(_expedition, IsSurvivorAlive, LivingParty(_expedition).Count);
+    public float ReturnDeathChanceOf(ActiveExpedition _expedition) => expeditions.DeathChanceOf(_expedition, IsSurvivorAlive, LivingParty(_expedition).Count, PartyHasScout(_expedition));
+
+    public bool PartyHasScout(ActiveExpedition _expedition)
+    {
+        if (_expedition == null)
+        {
+            return false;
+        }
+        foreach (string id in LivingParty(_expedition))
+        {
+            SurvivorUnit u = FindUnit(id);
+            if (u != null && TraitRules.HasTrait(u.State.Trait, TraitRules.SCOUT))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     public int SearchBonusOf(ActiveExpedition _expedition) => ExpeditionEventRules.SearchBonus(table.expeditionEvents, BaseRewardOf(_expedition));
 
@@ -1125,7 +1191,8 @@ public sealed class GameSession : MonoBehaviour
     {
         string reward = _outcome.returned.Length == 0 ? "귀환자 없음" : _outcome.withdrawn ? "철수 귀환" : _outcome.reward > 0 ? $"스크랩 +{_outcome.reward}" : "빈손 귀환";
         string rescued = _outcome.rescued != null ? $" · 구조 합류: {_outcome.rescued.displayName}" : string.Empty;
-        return $"{RegionName(_outcome.regionId)} · {reward}{rescued}\n귀환: {SurvivorNames(_outcome.returned)} / 사망: {SurvivorNames(_outcome.casualties)}";
+        string growths = _outcome.growths != null && _outcome.growths.Length > 0 ? $" · 성장: {string.Join(", ", _outcome.growths)}" : string.Empty;
+        return $"{RegionName(_outcome.regionId)} · {reward}{rescued}{growths}\n귀환: {SurvivorNames(_outcome.returned)} / 사망: {SurvivorNames(_outcome.casualties)}";
     }
 
     void ReturnFromExpedition(string _id)
@@ -1187,7 +1254,7 @@ public sealed class GameSession : MonoBehaviour
             maxHp = _candidate.maxHp,
             trait = _candidate.trait,
         };
-        var survivor = new SurvivorState(data, _newJoin: true, _injury: table.injury);
+        var survivor = new SurvivorState(data, _newJoin: true, _injury: table.injury, _traitMultiplier: table.experience.traitMultiplier);
         SurvivorUnit unit = Instantiate(survivorPrefab, joinPoint.position, Quaternion.identity, survivorRoot);
         unit.name = "Survivor_Joined" + data.id;
         DefenseMarkerView marker = Instantiate(defenseMarkerPrefab, joinPoint.position, Quaternion.identity, survivorRoot);
@@ -1317,6 +1384,10 @@ public sealed class GameSession : MonoBehaviour
         if (done != null)
         {
             GameEvents.RaiseTreatmentCompleted(done.Patient.Id, done.Patient.Hp);
+            if (done.Worker != null)
+            {
+                experienceTracker?.RecordTreatmentComplete(done.Worker.Id);
+            }
             ReleaseFromTreatment(done);
         }
     }
@@ -1692,5 +1763,10 @@ public sealed class GameSession : MonoBehaviour
             }
         }
         EnterPrep();
+    }
+
+    public void DebugAddExperience(string _id, StatType _stat, int _amount)
+    {
+        experienceTracker?.AddDebugExperience(_id, _stat, _amount);
     }
 }

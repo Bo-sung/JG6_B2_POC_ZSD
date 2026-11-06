@@ -137,4 +137,8 @@ public sealed class PocDebug : MonoBehaviour
 
     [ContextMenu("웨이브 재시작")]
     public void RestartWave() => session.DebugRestartWave();
+
+    // 디버그 전용: XP 지급 진입점(G6 검증용). 정규 경로와 같은 ExperienceTracker를 거친다.
+    public void AddExperience(string _id, StatType _stat, int _amount) => session.DebugAddExperience(_id, _stat, _amount);
+    public void AddExperience(string _id, string _stat, int _amount) => session.DebugAddExperience(_id, TraitRules.ParseStat(_stat), _amount);
 }

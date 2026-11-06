@@ -27,10 +27,10 @@ public sealed class SurvivorState
 {
     public string Id { get; }
     public string DisplayName { get; }
-    public int Combat { get; }
-    public int Work { get; }
-    public int Exploration { get; }
-    public SurvivorSpecialty Specialty { get; }
+    public int Combat { get; private set; }
+    public int Work { get; private set; }
+    public int Exploration { get; private set; }
+    public SurvivorSpecialty Specialty => SpecialtyOf(Combat, Work, Exploration);
     public string Trait { get; }
     // 합류 인원은 목록에서 '· 신규'로 구별한다. 초기 인원은 false다.
     public bool IsNewJoin { get; }
@@ -38,6 +38,7 @@ public sealed class SurvivorState
     public float Hp { get; private set; }
     public SurvivorActivity Activity { get; private set; }
     readonly InjuryData injury;
+    readonly float traitMultiplier;
 
     public bool IsAlive => Activity != SurvivorActivity.Dead;
     public bool IsAway => Activity == SurvivorActivity.Away;
@@ -45,15 +46,16 @@ public sealed class SurvivorState
     public bool IsCritical => Injury == InjuryStatus.Critical;
     public bool CanAct => IsAlive && !IsAway && !IsCritical;
 
-    // 효율 곱의 한 곳(V2-IMPL-07). 표시 능력치·사거리·이동 속도에는 쓰지 않는다. G4 특성 배율은 여기에 곱한다.
-    public float CombatEfficiency => InjuryRules.Efficiency(Injury, injury);
-    public float WorkEfficiency => InjuryRules.Efficiency(Injury, injury);
-    public float ExplorationEfficiency => InjuryRules.Efficiency(Injury, injury);
+    // 효율 곱의 한 곳(V2-IMPL-07). 표시 능력치·사거리·이동 속도에는 쓰지 않는다.
+    public float CombatEfficiency => InjuryRules.Efficiency(Injury, injury) * TraitRules.Multiplier(Trait, TraitRules.MARKSMAN, traitMultiplier);
+    public float WorkEfficiency => InjuryRules.Efficiency(Injury, injury) * TraitRules.Multiplier(Trait, TraitRules.FOREMAN, traitMultiplier);
+    public float ExplorationEfficiency => InjuryRules.Efficiency(Injury, injury) * TraitRules.Multiplier(Trait, TraitRules.SCOUT, traitMultiplier);
     public float EffectiveWork => Work * WorkEfficiency;
     public float EffectiveExploration => Exploration * ExplorationEfficiency;
 
     // _injury가 없으면 부상 구간 없이 생사만 판정한다. 부상과 무관한 규칙 테스트가 쓰며 세션은 항상 테이블을 넘긴다.
-    public SurvivorState(SurvivorData _data, bool _newJoin = false, InjuryData _injury = null)
+    // _traitMultiplier의 기본값 1은 특성 효과를 끈다는 뜻이다. 세션은 항상 테이블 값을 넘긴다.
+    public SurvivorState(SurvivorData _data, bool _newJoin = false, InjuryData _injury = null, float _traitMultiplier = 1)
     {
         if (_data == null)
         {
@@ -64,13 +66,45 @@ public sealed class SurvivorState
         Combat = _data.combat;
         Work = _data.work;
         Exploration = _data.exploration;
-        Specialty = SpecialtyOf(Combat, Work, Exploration);
         Trait = _data.trait ?? string.Empty;
         IsNewJoin = _newJoin;
         injury = _injury;
+        traitMultiplier = _traitMultiplier;
         MaxHp = _data.maxHp;
         Hp = _data.maxHp;
         Activity = SurvivorActivity.Guarding;
+    }
+
+    // 능력치 조회의 단일 출처.
+    public int StatOf(StatType _stat) => _stat switch
+    {
+        StatType.Combat => Combat,
+        StatType.Work => Work,
+        StatType.Exploration => Exploration,
+        _ => 0,
+    };
+
+    // 능력치 성장의 유일한 진입점. 상한을 넘지 않는다(V2-IMPL-14, TD-40). 성공 시 true.
+    public bool ImproveStat(StatType _stat, int _maxStat)
+    {
+        if (!IsAlive || StatOf(_stat) >= _maxStat)
+        {
+            return false;
+        }
+        switch (_stat)
+        {
+            case StatType.Combat:
+                Combat++;
+                return true;
+            case StatType.Work:
+                Work++;
+                return true;
+            case StatType.Exploration:
+                Exploration++;
+                return true;
+            default:
+                return false;
+        }
     }
 
     // 최고 능력치가 하나면 그 분야 특화이고, 같은 최고값이 여러 개면 범용이다.

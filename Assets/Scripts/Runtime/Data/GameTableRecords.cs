@@ -65,6 +65,26 @@ public sealed class RecruitmentData
     public SurvivorData[] candidates = Array.Empty<SurvivorData>();
 }
 
+// 경험치와 성장 수치(TD-40~44, V2-IMPL-07, 14).
+[Serializable]
+public sealed class ExperienceData
+{
+    public int xpPerStat;
+    public int maxStat;
+    public int combatFirstHitXp;
+    public int combatKillParticipationXp;
+    public int combatWaveCap;
+    public float workSecondsPerXp;
+    public int treatmentXp;
+    public int workWaveCap;
+    public int expeditionReturnXp;
+    public int expeditionEventResponseBonus;
+    public int expeditionEncounterSurvivalBonus;
+    public int expeditionCap;
+    public float withdrawMultiplier;
+    public float traitMultiplier;
+}
+
 // 부상 구간(최대 HP 대비 비율). normalMinHpFraction 이상 정상, lightMinHpFraction 이상 경상, 그 아래는 중상, 0은 사망이다.
 // lightEfficiency는 경상의 전투·작업·탐사 효율이다(V2-IMPL-07).
 [Serializable]
@@ -149,6 +169,8 @@ public sealed class ExpeditionEventData
     public float triggerMinFraction, triggerMaxFraction;
     public float timeoutSeconds;
     public float withdrawSeconds;
+    // 파티에 scout이 있을 때 사망·피해 위험에 곱한다. 여럿이어도 중첩하지 않는다(TD-44).
+    public float scoutRiskMultiplier;
     public RescueEventData rescue;
     public SupplyEventData supply;
     public EncounterEventData encounter;

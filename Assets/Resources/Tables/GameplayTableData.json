@@ -51,6 +51,22 @@
       { "id": "c8", "displayName": "이안", "combat": 2, "work": 3, "exploration": 2, "maxHp": 90, "trait": "" }
     ]
   },
+  "experience": {
+    "xpPerStat": 20,
+    "maxStat": 5,
+    "combatFirstHitXp": 3,
+    "combatKillParticipationXp": 2,
+    "combatWaveCap": 12,
+    "workSecondsPerXp": 30.0,
+    "treatmentXp": 3,
+    "workWaveCap": 10,
+    "expeditionReturnXp": 4,
+    "expeditionEventResponseBonus": 2,
+    "expeditionEncounterSurvivalBonus": 2,
+    "expeditionCap": 8,
+    "withdrawMultiplier": 0.5,
+    "traitMultiplier": 1.2
+  },
   "injury": {
     "normalMinHpFraction": 0.7,
     "lightMinHpFraction": 0.3,
@@ -142,6 +158,7 @@
     }
   ],
   "expeditionEvents": {
+    "scoutRiskMultiplier": 0.8,
     "triggerMinFraction": 0.3,
     "triggerMaxFraction": 0.7,
     "timeoutSeconds": 15,

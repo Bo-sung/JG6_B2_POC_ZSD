@@ -31,6 +31,8 @@ public sealed class LogGameLifecycle : MonoBehaviour
         GameEvents.TreatmentCompleted += OnTreatmentCompleted;
         GameEvents.TreatmentCancelled += OnTreatmentCancelled;
         GameEvents.TreatmentRejected += OnTreatmentRejected;
+        GameEvents.ExperienceGained += OnExperienceGained;
+        GameEvents.StatImproved += OnStatImproved;
         LogKitSetup.BeforeShutdown += EndForQuit;
     }
 
@@ -59,6 +61,8 @@ public sealed class LogGameLifecycle : MonoBehaviour
         GameEvents.TreatmentCompleted -= OnTreatmentCompleted;
         GameEvents.TreatmentCancelled -= OnTreatmentCancelled;
         GameEvents.TreatmentRejected -= OnTreatmentRejected;
+        GameEvents.ExperienceGained -= OnExperienceGained;
+        GameEvents.StatImproved -= OnStatImproved;
         LogKitSetup.BeforeShutdown -= EndForQuit;
         EndForQuit();
     }
@@ -245,6 +249,22 @@ public sealed class LogGameLifecycle : MonoBehaviour
     void OnTreatmentRejected(GameEvents.TreatmentRejectedInfo _info)
     {
         Write("TreatmentRejected", new Dictionary<string, object> { { "reason", _info.reason } });
+    }
+
+    void OnExperienceGained(GameEvents.ExperienceGainedInfo _info)
+    {
+        Write("ExperienceGained", new Dictionary<string, object>
+        {
+            { "id", _info.id }, { "stat", _info.stat }, { "amount", _info.amount }
+        });
+    }
+
+    void OnStatImproved(GameEvents.StatImprovedInfo _info)
+    {
+        Write("StatImproved", new Dictionary<string, object>
+        {
+            { "id", _info.id }, { "stat", _info.stat }, { "old", _info.old }, { "new", _info.@new }
+        });
     }
 
     void OnSessionEnded(GameEvents.SessionEndInfo _info)

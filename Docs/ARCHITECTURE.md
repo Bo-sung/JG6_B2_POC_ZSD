@@ -107,6 +107,14 @@ Prep 중 직접 이동한 인력은 생산에 기여하지 않고, 선택 패널
 - **표시.** `ExpeditionPanelView`의 `EventArea`가 먼저 만료되는 사건과 `대기 사건 n건`을 보여 주고, 패널 왼쪽에 붙어 9명 행을 가리지 않는다. HUD는 `ExpeditionEventNotice`를 켜고 패널을 열지 않는다(TD-35). 위험 계산은 `ExpeditionEventRules`에 모여 있어 G4 `scout`의 감소를 여기에 곱하면 된다.
 - **로그.** `ExpeditionStarted`와 `ExpeditionResolved`에 `expeditionId`를 넣었다. `decision` 값은 `rescue`, `search`, `continue`, `withdraw`, `timeout`, `forced`이고, `outcome` 값은 `rescue_success`, `rescue_failed`, `search_safe`, `search_hurt`, `encounter`, `continued`, `withdrawn`이다.
 
+## 경험치와 성장 (G4)
+
+- **순수 모델:** `ExperienceTracker`가 생존자별·능력치별(`Combat`, `Work`, `Exploration`) XP 누적, 초과분 이월, 웨이브/건당 상한(전투 12, 작업 10, 탐사 8), 능력치 상한(5)을 단일 관리한다. 사망자는 XP를 받지 않으며, 사망 후 성장치 승계나 ID 재사용은 없다.
+- **성장 단일 경로:** 성장은 `SurvivorState.ImproveStat(StatType)`을 통해서만 +1씩 적용된다(TD-40). `Specialty`는 능력치에서 동적으로 계산(`SpecialtyOf`)되어 수치와 전문 분야 표기가 어긋나지 않는다.
+- **단위 반영:** `SurvivorUnit`은 `GameEvents.StatImproved`를 구독해 몸체 색상(전문 분야), 무기 크기(전투), 사거리 표식을 즉시 갱신한다. `AttackRange`와 `DamagePerSecond`는 `State.Combat`을 직접 읽어 즉시 반영된다.
+- **특성 곱의 한 곳:** `TraitRules`를 통해 `marksman`(전투 ×1.2), `foreman`(작업 ×1.2), `scout`(탐사 ×1.2)이 `SurvivorState`의 각 효율(`CombatEfficiency`, `WorkEfficiency`, `ExplorationEfficiency`)에서 부상 효율과 곱해진다. 사거리·이동 속도·표시 능력치에는 곱하지 않는다. `scout` 위험 감소(사망률·사건 피해 확률·조우 피해율 ×0.8)는 `ExpeditionEventRules` 및 `ExpeditionSystem`에서 판정하며, 파티에 여러 명이 있어도 중첩되지 않는다.
+- **이벤트·로그:** `ExperienceGained(id, stat, amount)` 및 `StatImproved(id, stat, old, new)`를 발행하고 `LogGameLifecycle`에서 로깅한다.
+
 ## 이벤트
 
 도메인 이벤트는 템플릿 규칙대로 `GameEvents`에 struct 페이로드로 추가하고 `Raise*`로만 발행한다. 컴포넌트끼리 서로를 직접 호출해 알리지 않는다. `LogGameLifecycle`과 Presenter가 구독한다.

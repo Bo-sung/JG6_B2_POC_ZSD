@@ -1,5 +1,13 @@
 // POC 전체가 공유하는 상태 열거형.
 
+// 능력치 3종. 기준서 4.2를 따른다.
+public enum StatType
+{
+    Combat,
+    Work,
+    Exploration,
+}
+
 public enum SessionPhase
 {
     Prep,

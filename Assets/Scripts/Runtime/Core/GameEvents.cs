@@ -303,6 +303,32 @@ public static class GameEvents
         }
     }
 
+    // 기준서 7.4. stat은 Combat, Work, Exploration이다.
+    public readonly struct ExperienceGainedInfo
+    {
+        public readonly string id, stat;
+        public readonly int amount;
+        public ExperienceGainedInfo(string _id, string _stat, int _amount)
+        {
+            id = _id;
+            stat = _stat;
+            amount = _amount;
+        }
+    }
+
+    public readonly struct StatImprovedInfo
+    {
+        public readonly string id, stat;
+        public readonly int old, @new;
+        public StatImprovedInfo(string _id, string _stat, int _old, int _new)
+        {
+            id = _id;
+            stat = _stat;
+            old = _old;
+            @new = _new;
+        }
+    }
+
     // ── POC 이벤트 ──
     public static event Action<SessionStartInfo> SessionStarted;
     public static event Action<SessionEndInfo> SessionEnded;
@@ -328,6 +354,8 @@ public static class GameEvents
     public static event Action<TreatmentCompletedInfo> TreatmentCompleted;
     public static event Action<TreatmentCancelledInfo> TreatmentCancelled;
     public static event Action<TreatmentRejectedInfo> TreatmentRejected;
+    public static event Action<ExperienceGainedInfo> ExperienceGained;
+    public static event Action<StatImprovedInfo> StatImproved;
 
     public static void RaiseSessionStarted(int _seed) => Emit(SessionStarted, new SessionStartInfo(_seed));
     public static void RaiseSessionEnded(SessionResult _result, string _reason) => Emit(SessionEnded, new SessionEndInfo(_result, _reason));
@@ -353,6 +381,8 @@ public static class GameEvents
     public static void RaiseTreatmentCompleted(string _patientId, float _hp) => Emit(TreatmentCompleted, new TreatmentCompletedInfo(_patientId, _hp));
     public static void RaiseTreatmentCancelled(string _patientId, string _reason) => Emit(TreatmentCancelled, new TreatmentCancelledInfo(_patientId, _reason));
     public static void RaiseTreatmentRejected(string _reason) => Emit(TreatmentRejected, new TreatmentRejectedInfo(_reason));
+    public static void RaiseExperienceGained(string _id, string _stat, int _amount) => Emit(ExperienceGained, new ExperienceGainedInfo(_id, _stat, _amount));
+    public static void RaiseStatImproved(string _id, string _stat, int _old, int _new) => Emit(StatImproved, new StatImprovedInfo(_id, _stat, _old, _new));
 
     // ── 이벤트 ──
     public static event Action<RunInfo> RunStarted;

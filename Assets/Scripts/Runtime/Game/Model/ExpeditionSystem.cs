@@ -6,11 +6,13 @@ public readonly struct ExpeditionMember
     public readonly string id;
     // 부상·특성 효율을 반영한 실효값이다. 파티 합은 TotalExploration으로만 구한다.
     public readonly float exploration;
+    public readonly bool isScout;
 
-    public ExpeditionMember(string _id, float _exploration)
+    public ExpeditionMember(string _id, float _exploration, bool _isScout = false)
     {
         id = _id;
         exploration = _exploration;
+        isScout = _isScout;
     }
 }
 
@@ -58,8 +60,11 @@ public sealed class ActiveExpedition
     public int BonusReward { get; internal set; }
     // 구조 성공으로 확보한 후보. 자리 예약과 짝이고 귀환 정산 때만 합류한다(V2-IMPL-11).
     public SurvivorData RescuedCandidate { get; internal set; }
+    public bool HadEncounter { get; internal set; }
+    public bool RespondedToEvent { get; internal set; }
     internal int Exploration { get; }
     readonly ExpeditionMember[] members;
+    public IReadOnlyList<ExpeditionMember> Members => members;
 
     internal ActiveExpedition(int _expeditionId, ExpeditionRegionData _region, ExpeditionMember[] _members)
     {
@@ -100,8 +105,11 @@ public readonly struct ExpeditionOutcome
     public readonly int expeditionId;
     public readonly bool withdrawn;
     public readonly SurvivorData rescued;
+    public readonly bool hadEncounter;
+    public readonly bool respondedToEvent;
+    public readonly string[] growths;
 
-    public ExpeditionOutcome(string _regionId, int _reward, string[] _casualties, string[] _returned, int _expeditionId = 0, bool _withdrawn = false, SurvivorData _rescued = null)
+    public ExpeditionOutcome(string _regionId, int _reward, string[] _casualties, string[] _returned, int _expeditionId = 0, bool _withdrawn = false, SurvivorData _rescued = null, bool _hadEncounter = false, bool _respondedToEvent = false, string[] _growths = null)
     {
         regionId = _regionId;
         reward = _reward;
@@ -110,6 +118,9 @@ public readonly struct ExpeditionOutcome
         expeditionId = _expeditionId;
         withdrawn = _withdrawn;
         rescued = _rescued;
+        hadEncounter = _hadEncounter;
+        respondedToEvent = _respondedToEvent;
+        growths = _growths;
     }
 }
 
@@ -383,8 +394,17 @@ public sealed class ExpeditionSystem
             }
             ExpeditionRegionData region = regions[expedition.regionId];
             int exploration = expedition.LivingExploration(_isAlive);
+            bool hasScout = false;
+            foreach (ExpeditionMember m in expedition.Members)
+            {
+                if (m.isScout && alive.Contains(m.id))
+                {
+                    hasScout = true;
+                    break;
+                }
+            }
             bool rewarded = random.NextDouble() < RewardChance(region.id, exploration);
-            bool died = random.NextDouble() < DeathChance(region.id, exploration, alive.Count);
+            bool died = random.NextDouble() < DeathChance(region.id, exploration, alive.Count, hasScout);
             // 사망 여부와 무관하게 난수를 3회 소비한다. 철수·전멸도 같아서 뒤따르는 파견의 결과가 갈리지 않는다.
             int victim = random.Next(Math.Max(1, alive.Count));
             // 철수는 기존 판정을 없애고, 사건에서 이미 죽은 파티원은 판정 대상이 아니다(V2-IMPL-12, 13).
@@ -407,7 +427,7 @@ public sealed class ExpeditionSystem
                 reward = (rewarded ? ExpectedReward(region.id, exploration) : 0) + expedition.BonusReward;
             }
             expedition.IsSettled = true;
-            outcomes.Add(new ExpeditionOutcome(region.id, reward, casualties.ToArray(), returned.ToArray(), expedition.expeditionId, expedition.IsWithdrawn, expedition.RescuedCandidate));
+            outcomes.Add(new ExpeditionOutcome(region.id, reward, casualties.ToArray(), returned.ToArray(), expedition.expeditionId, expedition.IsWithdrawn, expedition.RescuedCandidate, expedition.HadEncounter, expedition.RespondedToEvent, null));
             active.RemoveAt(index);
         }
         return outcomes;
@@ -419,10 +439,11 @@ public sealed class ExpeditionSystem
         return ClampChance(region.rewardChanceBase + region.rewardChancePerExploration * _totalExploration);
     }
 
-    public float DeathChance(string _regionId, int _totalExploration, int _partyCount)
+    public float DeathChance(string _regionId, int _totalExploration, int _partyCount, bool _hasScout = false)
     {
         ExpeditionRegionData region = regions[_regionId];
-        return ClampChance(region.deathChanceBase + region.deathChancePerExploration * _totalExploration + region.deathChancePerExtraMember * (_partyCount - 1));
+        float chance = ClampChance(region.deathChanceBase + region.deathChancePerExploration * _totalExploration + region.deathChancePerExtraMember * (_partyCount - 1));
+        return _hasScout && events != null ? ClampChance(chance * events.scoutRiskMultiplier) : chance;
     }
 
     // UI에는 보상 성공 시 지급량을 표시한다. 중간값은 양수에서 올림한다.
@@ -439,9 +460,9 @@ public sealed class ExpeditionSystem
     }
 
     // 귀환 때 적용될 사망 판정 확률. 정산과 같이 살아 있는 파티원 기준이다.
-    public float DeathChanceOf(ActiveExpedition _expedition, Func<string, bool> _isAlive, int _aliveCount)
+    public float DeathChanceOf(ActiveExpedition _expedition, Func<string, bool> _isAlive, int _aliveCount, bool _hasScout = false)
     {
-        return DeathChance(_expedition.regionId, _expedition.LivingExploration(_isAlive), _aliveCount);
+        return DeathChance(_expedition.regionId, _expedition.LivingExploration(_isAlive), _aliveCount, _hasScout);
     }
 
     static float ClampChance(float _chance)

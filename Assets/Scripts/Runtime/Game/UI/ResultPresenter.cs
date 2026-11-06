@@ -42,7 +42,8 @@ public sealed class ResultPresenter
     {
         WaveSummary wave = session.LastWave;
         string deaths = wave.deaths.Length > 0 ? string.Join(", ", wave.deaths) : "없음";
-        string body = $"핵심 시설 {Mathf.CeilToInt(wave.coreHp)}/{Mathf.CeilToInt(session.Core.MaxHp)}\n생존자 {wave.alive}명 · 스크랩 {wave.scrap}\n이번 웨이브 사망: {deaths}\nHP와 부상은 다음 웨이브로 이어집니다 · 경상 {session.CountInjury(InjuryStatus.Light)}명 · 중상 {session.CountInjury(InjuryStatus.Critical)}명";
+        string growths = wave.growths != null && wave.growths.Length > 0 ? string.Join(", ", wave.growths) : "없음";
+        string body = $"핵심 시설 {Mathf.CeilToInt(wave.coreHp)}/{Mathf.CeilToInt(session.Core.MaxHp)}\n생존자 {wave.alive}명 · 스크랩 {wave.scrap}\n이번 웨이브 사망: {deaths}\n이번 웨이브 성장: {growths}\nHP와 부상은 다음 웨이브로 이어집니다 · 경상 {session.CountInjury(InjuryStatus.Light)}명 · 중상 {session.CountInjury(InjuryStatus.Critical)}명";
         if (wave.timedOutEnemies > 0)
         {
             body += $"\n시간 초과: 남은 적 {wave.timedOutEnemies}기로 핵심 시설 피해 {Mathf.CeilToInt(wave.timeoutDamage)}";

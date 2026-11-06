@@ -198,16 +198,30 @@ public sealed class ExpeditionPanelPresenter
             view.SetMemberVisible(index, true);
             SurvivorState state = session.Units[index].State;
             bool chosen = selected.Contains(state.Id);
-            string stat = state.Injury == InjuryStatus.Light && !state.IsAway ? $"탐사 {state.Exploration}→{state.EffectiveExploration:0.##}(경상)" : $"탐사 {state.Exploration}";
+            string stat = state.Injury == InjuryStatus.Light && !state.IsAway
+                ? $"탐사 {state.Exploration}→{state.EffectiveExploration:0.##}(경상)"
+                : System.Math.Abs(state.EffectiveExploration - state.Exploration) > 0.001f && !state.IsAway
+                    ? $"탐사 {state.Exploration}→{state.EffectiveExploration:0.##}"
+                    : $"탐사 {state.Exploration}";
             view.ShowMember(index, $"{(chosen ? "[선택]" : "[  ]")} {state.DisplayName}{(state.IsNewJoin ? " · 신규" : "")} · {stat} · {DutyOf(state)}", CanSelect(state));
         }
+        bool hasScout = false;
+        foreach (string id in selected)
+        {
+            if (TraitRules.HasTrait(session.FindUnit(id).State.Trait, TraitRules.SCOUT))
+            {
+                hasScout = true;
+                break;
+            }
+        }
+        float deathChance = session.Expeditions.DeathChance(region.id, exploration, selected.Count, hasScout);
         float rewardChance = session.Expeditions.RewardChance(region.id, exploration);
         if (selected.Count == 1)
         {
-            rewardChance *= 1 - session.Expeditions.DeathChance(region.id, exploration, selected.Count);
+            rewardChance *= 1 - deathChance;
         }
         string prediction = selected.Count > 0
-            ? $"위험 {region.riskLabel} · 최대 1명 사망 {session.Expeditions.DeathChance(region.id, exploration, selected.Count):P1}\n보상 성공 시 {session.Expeditions.ExpectedReward(region.id, exploration)} 스크랩 · 지급 확률 {rewardChance:P1}"
+            ? $"위험 {region.riskLabel} · 최대 1명 사망 {deathChance:P1}\n보상 성공 시 {session.Expeditions.ExpectedReward(region.id, exploration)} 스크랩 · 지급 확률 {rewardChance:P1}"
             : $"위험 {region.riskLabel} · 인원을 선택하면 확률·보상을 표시합니다.";
         var timing = TableManager.Instance.Gameplay.session;
         string preview = $"{region.displayName} · {selected.Count}/{region.maxParty}명 · 탐사 합 {exploration}\n소요 {region.durationSeconds:0}초 · {ExpeditionLabels.ReturnTiming(region.durationSeconds, session.Phase, session.PhaseRemaining, timing.alertSeconds, timing.combatSeconds)}\n{prediction}";

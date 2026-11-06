@@ -142,6 +142,7 @@ public sealed class GameTableRules
         ValidateSession(_tables.Gameplay);
         ValidateSurvivors(_tables.Gameplay);
         ValidateRecruitment(_tables.Gameplay);
+        ValidateExperience(_tables.Gameplay);
         ValidateInjury(_tables.Gameplay);
         ValidateBuildings(_tables.Gameplay.buildings);
         ValidateWaves(_tables.Gameplay);
@@ -279,6 +280,30 @@ public sealed class GameTableRules
     // 초기 인원의 특성도 같은 키 집합으로 검사한다. 효과는 G4에서 붙는다.
     static bool IsKnownTrait(string _trait) => string.IsNullOrEmpty(_trait) || Array.IndexOf(TRAIT_KEYS, _trait) >= 0;
 
+    void ValidateExperience(GameplayTableData _gameplay)
+    {
+        var exp = _gameplay.experience;
+        if (exp == null)
+        {
+            Check(false, "Gameplay.experience", "경험치 및 성장 설정이 필요합니다.");
+            return;
+        }
+        Positive(exp.xpPerStat, "Gameplay.experience.xpPerStat");
+        Check(exp.maxStat == STAT_MAX, "Gameplay.experience.maxStat", $"최대 능력치는 {STAT_MAX}여야 합니다.");
+        Nonnegative(exp.combatFirstHitXp, "Gameplay.experience.combatFirstHitXp");
+        Nonnegative(exp.combatKillParticipationXp, "Gameplay.experience.combatKillParticipationXp");
+        Positive(exp.combatWaveCap, "Gameplay.experience.combatWaveCap");
+        Positive(exp.workSecondsPerXp, "Gameplay.experience.workSecondsPerXp");
+        Nonnegative(exp.treatmentXp, "Gameplay.experience.treatmentXp");
+        Positive(exp.workWaveCap, "Gameplay.experience.workWaveCap");
+        Nonnegative(exp.expeditionReturnXp, "Gameplay.experience.expeditionReturnXp");
+        Nonnegative(exp.expeditionEventResponseBonus, "Gameplay.experience.expeditionEventResponseBonus");
+        Nonnegative(exp.expeditionEncounterSurvivalBonus, "Gameplay.experience.expeditionEncounterSurvivalBonus");
+        Positive(exp.expeditionCap, "Gameplay.experience.expeditionCap");
+        Fraction(exp.withdrawMultiplier, "Gameplay.experience.withdrawMultiplier");
+        Check(exp.traitMultiplier > 1, "Gameplay.experience.traitMultiplier", "1보다 커야 합니다.");
+    }
+
     void ValidateInjury(GameplayTableData _gameplay)
     {
         var injury = _gameplay.injury;
@@ -390,6 +415,7 @@ public sealed class GameTableRules
         Check(_events.triggerMinFraction >= 0 && _events.triggerMinFraction <= _events.triggerMaxFraction && _events.triggerMaxFraction <= 1, PATH + ".triggerMinFraction", "0 <= triggerMinFraction <= triggerMaxFraction <= 1 이어야 합니다.");
         Positive(_events.timeoutSeconds, PATH + ".timeoutSeconds");
         Positive(_events.withdrawSeconds, PATH + ".withdrawSeconds");
+        Check(_events.scoutRiskMultiplier > 0 && _events.scoutRiskMultiplier <= 1, PATH + ".scoutRiskMultiplier", "0 초과 1 이하여야 합니다.");
         Nonnegative(_events.rescue.extraSeconds, PATH + ".rescue.extraSeconds");
         Fraction(_events.rescue.chanceBase, PATH + ".rescue.chanceBase");
         Nonnegative(_events.rescue.chancePerExploration, PATH + ".rescue.chancePerExploration");
