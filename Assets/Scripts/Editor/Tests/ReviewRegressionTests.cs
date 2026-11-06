@@ -23,6 +23,15 @@ public sealed class ReviewRegressionTests
         return _target.GetType().GetMethod(_method, PRIVATE_INSTANCE).Invoke(_target, _args);
     }
 
+    // LogKitSetup이 이름으로 되돌리는 필드다. 패키지를 올려 이름이 바뀌면 조용히 실패하지 않게 여기서 잡는다.
+    [Test]
+    public void LogKitQuittingFieldStillExists()
+    {
+        FieldInfo field = typeof(LogKit.GameLogger).GetField(LogKitSetup.LOGKIT_QUITTING_FIELD, BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.That(field, Is.Not.Null);
+        Assert.That(field.FieldType, Is.EqualTo(typeof(bool)));
+    }
+
     [SetUp]
     public void Setup()
     {

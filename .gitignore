@@ -112,3 +112,7 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# 빌드 산출물과 LogKit 빌드 임시 설정(서버 주소·키 포함)
+/[Aa]rtifacts/
+/[Aa]ssets/[Rr]esources/LogKitBuildConfig.json*

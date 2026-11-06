@@ -2,6 +2,7 @@ using System;
 using LogKit;
 using UnityEngine;
 #if UNITY_EDITOR
+using System.Reflection;
 using UnityEditor;
 #endif
 
@@ -18,12 +19,20 @@ public static class LogKitSetup
     //   에디터: 같은 환경변수를 PC에 설정하면 여기서 적용하고, 없으면 GameLogger Inspector 값을 쓴다.
     const string SERVER_URL_VARIABLE = "LOGKIT_SERVER_URL";
     const string UPLOAD_KEY_VARIABLE = "LOGKIT_UPLOAD_KEY";
+#if UNITY_EDITOR
+    public const string LOGKIT_QUITTING_FIELD = "_quitting";
+#endif
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetShutdownHooks()
     {
         RemoveShutdownHooks();
         BeforeShutdown = null;
+#if UNITY_EDITOR
+        // 도메인 리로드가 꺼져 있으면 LogKit 종료 플래그가 다음 Play까지 남아 인스턴스가 생기지 않는다.
+        // 패키지를 고치지 않고 플래그만 되돌린다(DEC-28). 업스트림에 수정이 들어가면 지운다.
+        typeof(GameLogger).GetField(LOGKIT_QUITTING_FIELD, BindingFlags.NonPublic | BindingFlags.Static)?.SetValue(null, false);
+#endif
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]

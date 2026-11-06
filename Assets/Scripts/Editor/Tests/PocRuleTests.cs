@@ -261,8 +261,13 @@ public sealed class PocRuleTests
     {
         return new ExpeditionRegionData
         {
-            id = "test", durationSeconds = 4, minParty = 1, maxParty = 3,
-            rewardChanceBase = 0.5f, rewardBase = 5, deathChanceBase = 0.5f
+            id = "test",
+            durationSeconds = 4,
+            minParty = 1,
+            maxParty = 3,
+            rewardChanceBase = 0.5f,
+            rewardBase = 5,
+            deathChanceBase = 0.5f
         };
     }
 
