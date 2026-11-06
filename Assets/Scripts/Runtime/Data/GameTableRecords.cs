@@ -44,13 +44,25 @@ public sealed class SurvivorCombatData
     public float towerDamageMultiplier;
 }
 
-// 초기 생존자 한 명. id가 키이며 능력치는 1~5.
+// 생존자 한 명(초기 인원과 영입 후보 공용). id가 키이며 능력치는 1~5.
+// trait은 G4에서 효과를 가지는 키이고, 비어 있으면 특성이 없다.
 [Serializable]
 public sealed class SurvivorData
 {
     public string id, displayName;
     public int combat, work, exploration;
     public float maxHp;
+    public string trait;
+}
+
+// 인력 수급(거점 방문과 구조 몫). capacity는 파견·중상을 포함한 살아 있는 인원의 상한이다.
+[Serializable]
+public sealed class RecruitmentData
+{
+    public int capacity;
+    public int visitorCost;
+    public int[] visitorWaves = Array.Empty<int>();
+    public SurvivorData[] candidates = Array.Empty<SurvivorData>();
 }
 
 [Serializable]

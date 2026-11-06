@@ -74,8 +74,10 @@ public abstract class PanelBase : MonoBehaviour
         }
 
         bool changed = IsOpen != _open;
-        Root.SetActive(_open);
+        // IsOpen을 먼저 바꾼다. SetActive에 곧장 이어지는 OnEnable·OnDisable이 옛값으로 되돌리면
+        // 첫 Open에서 꺼진 상태(IsOpen만 참)로 남는다.
         IsOpen = _open;
+        Root.SetActive(_open);
         if (!changed && !_quiet)
         {
             return true;

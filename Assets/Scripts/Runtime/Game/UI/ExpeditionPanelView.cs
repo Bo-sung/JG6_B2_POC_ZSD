@@ -18,6 +18,8 @@ public sealed class ExpeditionPanelView : MonoBehaviour
     public event Action<int> MemberClicked;
     public event Action DispatchClicked;
 
+    public int MemberCount => memberButtons.Length;
+
     void Awake()
     {
         nearButton.onClick.AddListener(() => RegionClicked?.Invoke(0));
@@ -34,6 +36,12 @@ public sealed class ExpeditionPanelView : MonoBehaviour
     {
         memberLabels[_index].text = _label;
         memberButtons[_index].interactable = _available;
+    }
+
+    // 합류로 인원이 늘기 전에는 남는 멤버 행을 숨긴다.
+    public void SetMemberVisible(int _index, bool _visible)
+    {
+        memberButtons[_index].gameObject.SetActive(_visible);
     }
 
     public void Show(string _preview, string _status, bool _canDispatch, string _active, string _history)

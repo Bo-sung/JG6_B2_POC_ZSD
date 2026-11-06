@@ -103,6 +103,12 @@ public sealed class SurvivorUnit : MonoBehaviour
         }
     }
 
+    // 합류 인력은 씬 표식이 없으므로 Bind 전에 새 표식을 연결한다.
+    public void SetDefenseMarker(DefenseMarkerView _marker)
+    {
+        defenseMarker = _marker;
+    }
+
     void LateUpdate()
     {
         if (State != null)

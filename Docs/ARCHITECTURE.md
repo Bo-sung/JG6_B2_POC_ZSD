@@ -18,6 +18,7 @@
 | `Game/Model` | `AssignmentBoard` | 작업(생산/방어 대기)과 방어 위치(지점/감시탑)를 독립 저장. 정원·사망·파견 규칙 |
 | `Game/Model` | `ResourceEconomy` | 스크랩, 생산 누적, 비용 차감. 음수 금지 |
 | `Game/Model` | `ExpeditionSystem` | 파견·시간 경과·결과 판정(DEC-16) |
+| `Game/Model` | `RecruitmentSystem` | 인력 수급: 수용 상한 판정(살아 있는 인원+예약 < capacity), 방문 후보 추첨, 신규 ID 발급, 방문 상태. G3 구조 예약 API 포함 |
 | `Game/Model` | `SessionRng` | 시드 하나에서 용도별 독립 `System.Random` 생성 |
 | `Game/Session` | `GameSession` | 단계 전환, 웨이브 번호, 승패, 하위 시스템 소유 |
 | `Game/Session` | `SessionLaunch` | Title에서 Game으로 시드 전달. Game 직접 실행 시 기본값 |
@@ -72,6 +73,13 @@ Prep 중 직접 이동한 인력은 생산에 기여하지 않고, 선택 패널
 - 맵에 NavMesh를 베이크하고, 방벽은 `NavMeshObstacle`(carve)로 길을 막는다. 관통은 버그다.
 - `EnemyUnit`은 주기적으로 핵심 시설까지 `CalculatePath`를 계산한다. 경로가 완전하면 따라가고, 부분 경로면 끝까지 이동한 뒤 가장 가까운 방벽을 공격한다. 방벽이 파괴되면 재계산한다.
 - 생존자가 막힌 위치를 지정해도 갈 수 있는 곳까지 간다.
+
+## 인력 수급과 합류 경로 (v2)
+
+- `RecruitmentSystem`이 수급 규칙의 한 곳이다. 상한 판정은 `살아 있는 보유 인원(파견·중상 포함) + 귀환 예정 예약 < capacity` 하나뿐이고, 후보는 세션 시작 때 `SessionRng`의 `recruit` 스트림으로 섞어 방문 몫(W2·W4)을 먼저 정하고 나머지는 구조 몫 큐로 둔다(V2-IMPL-09). 신규 ID는 후보와 무관한 세션 순번(`n1`, `n2`…)으로 발급하고 재사용하지 않는다.
+- 방문자는 해당 웨이브 준비 시작(`EnterPrep`)에 도착하고, 경보 진입(`EnterAlert`)에 미결정이면 만료된다. 영입의 권위 경로는 `GameSession.TryRecruitVisitor(out error)` 하나다: 방문 대기 → 상한 → 스크랩 차감 → 공통 합류 순서이며, 실패하면 아무것도 바뀌지 않고 사유(`no_scrap`, `full`)를 돌려준다. '보내기'와 만료는 `RecruitmentRejected(declined/expired)`로 기록된다.
+- 합류는 `GameSession.JoinSurvivor` 한 경로로만 한다. `Survivor.prefab`을 씬의 `JoinPoint`(거점 입구)에 Instantiate하고, 초기 인원과 같은 `RegisterSurvivor`로 등록(board·unitsById·units·Bind·표식·배정 로그)한다. 합류 인력은 HP 최대, 작업은 방어 대기, 방어 위치는 합류 지점이되 플레이어가 정하기 전까지는 '방어 위치 미지정'으로 표시된다(V2-IMPL-08). 씬 표식이 없으므로 `DefenseMarker.prefab`을 함께 놓는다.
+- HUD는 `인원 현재/최대`를 항상 보여 주고, 대기 중 방문자가 있으면 `방문자 도착` 항목을 켠다. `VisitorPanel`(MVP: `VisitorPanelView`+`VisitorPanelPresenter`)에서 이름·능력치·특성·비용·현재 인원/상한과 영입·보내기를 처리한다. 거점 입구 표식(`VisitorMarkerView`)은 방문 대기 중에만 켜지고 콜라이더가 없어 클릭 판정에 끼지 않는다.
 
 ## 이벤트
 

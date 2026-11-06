@@ -44,11 +44,18 @@ public sealed class GameSession : MonoBehaviour
     const string REASON_RESTART = "restart";
     const string STREAM_EXPEDITION = "expedition";
     const string STREAM_WAVE = "wave";
+    const string STREAM_RECRUIT = "recruit";
 
     [SerializeField] CoreFacility core;
     [SerializeField] ProductionFacility production;
     [SerializeField] WaveDirector waveDirector;
-    [SerializeField] SurvivorUnit[] units = Array.Empty<SurvivorUnit>();
+    // 초기 인원은 씬에 배치하고, 합류 인력은 survivorPrefab을 joinPoint에 Instantiate한다.
+    [SerializeField] List<SurvivorUnit> units = new List<SurvivorUnit>();
+    [SerializeField] SurvivorUnit survivorPrefab;
+    // 합류 인력은 씬에 표식이 없으므로 프리팹 표식을 새로 놓는다.
+    [SerializeField] DefenseMarkerView defenseMarkerPrefab;
+    [SerializeField] Transform survivorRoot;
+    [SerializeField] Transform joinPoint;
     [SerializeField] Transform[] defaultDefensePoints = Array.Empty<Transform>();
     [SerializeField] Transform returnPoint;
     [SerializeField] Transform buildingRoot;
@@ -64,6 +71,7 @@ public sealed class GameSession : MonoBehaviour
     ResourceEconomy economy;
     AssignmentBoard board;
     ExpeditionSystem expeditions;
+    RecruitmentSystem recruitment;
     int seed;
     int buildingSequence;
     readonly Dictionary<string, (WorkAssignment work, DefenseAssignment defense)> loggedAssignments = new Dictionary<string, (WorkAssignment, DefenseAssignment)>();
@@ -124,11 +132,14 @@ public sealed class GameSession : MonoBehaviour
     public WaveDirector Waves => waveDirector;
     public AssignmentBoard Assignments => board;
     public ExpeditionSystem Expeditions => expeditions;
+    public RecruitmentSystem Recruitment => recruitment;
     public ResourceEconomy Economy => economy;
     public IReadOnlyList<SurvivorUnit> Units => units;
     public IReadOnlyList<BuildingBase> Buildings => buildings;
     public BuildingBase WallPrefab => wallPrefab;
     public BuildingBase TowerPrefab => towerPrefab;
+    // 수용 상한 9명. HUD와 패널이 이 값을 표시한다.
+    public int Capacity => recruitment.Capacity;
 
     public int AliveCount
     {
@@ -197,6 +208,7 @@ public sealed class GameSession : MonoBehaviour
         economy = new ResourceEconomy(table.session.startScrap, table.production.scrapPerSecondPerWork);
         board = new AssignmentBoard(table.production.maxWorkers);
         expeditions = new ExpeditionSystem(table.expeditions, rng.For(STREAM_EXPEDITION));
+        recruitment = new RecruitmentSystem(table.recruitment, rng.For(STREAM_RECRUIT));
         core.Initialize(table.core.maxHp);
         BindProduction();
         waveDirector.Initialize(this, rng.For(STREAM_WAVE));
@@ -281,19 +293,16 @@ public sealed class GameSession : MonoBehaviour
     void BindSurvivors()
     {
         SurvivorData[] roster = table.survivors;
-        if (units.Length != roster.Length || defaultDefensePoints.Length < roster.Length)
+        // 직렬화된 units에는 씬에 배치한 초기 인원이 이미 들어 있다. 등록 경로가 다시 추가하지 않게 별도로 받아 둔다.
+        var placed = new List<SurvivorUnit>(units);
+        units.Clear();
+        if (unitsById.Count != 0 || placed.Count != roster.Length || defaultDefensePoints.Length < roster.Length)
         {
             throw new InvalidOperationException("씬의 생존자 또는 기본 방어 지점 수가 테이블과 다릅니다.");
         }
         for (int index = 0; index < roster.Length; index++)
         {
-            var survivor = new SurvivorState(roster[index]);
-            Vector3 point = defaultDefensePoints[index].position;
-            survivors.Add(survivor);
-            board.Register(survivor, new DefenseAssignment(point.x, point.z));
-            unitsById.Add(survivor.Id, units[index]);
-            units[index].Bind(survivor, table.survivorCombat);
-            units[index].ShowDefenseMarker(point);
+            RegisterSurvivor(new SurvivorState(roster[index]), placed[index], defaultDefensePoints[index].position);
         }
         // 첫 준비에서 바로 고민할 수 있도록 작업 능력이 높은 순으로 생산 시설을 채운다. 플레이어가 바꿀 수 있다.
         var byWork = new List<SurvivorState>(survivors);
@@ -311,6 +320,12 @@ public sealed class GameSession : MonoBehaviour
         expeditionsThisWave.Clear();
         destroyedThisWave = 0;
         GameEvents.RaisePhaseChanged(flow.Phase, flow.WaveNumber);
+        // 방문 웨이브의 준비가 시작하면 방문자가 도착한다(기준서 4.1A).
+        VisitorRecord arrived = recruitment.ArriveVisitor(flow.WaveNumber);
+        if (arrived != null)
+        {
+            GameEvents.RaiseVisitorArrived(arrived.Candidate.id, arrived.Wave);
+        }
         foreach (SurvivorUnit unit in units)
         {
             if (unit.State.CanAct)
@@ -324,6 +339,12 @@ public sealed class GameSession : MonoBehaviour
     {
         flow.Advance();
         GameEvents.RaisePhaseChanged(flow.Phase, flow.WaveNumber);
+        // 준비 단계가 끝나면 미결정 방문자는 만료된다.
+        VisitorRecord expired = recruitment.ExpireVisitor(flow.WaveNumber);
+        if (expired != null)
+        {
+            GameEvents.RaiseRecruitmentRejected(RecruitmentSystem.REASON_EXPIRED);
+        }
         foreach (SurvivorUnit unit in units)
         {
             if (unit.State.CanAct)
@@ -781,6 +802,99 @@ public sealed class GameSession : MonoBehaviour
         }
     }
 
+    // ── 공통 합류 경로 ──
+    // 초기 인원과 합류 인원이 같은 등록 함수를 쓴다(새 인력도 완전히 같은 규칙, V2-DEC-04).
+    // 합류 인원은 방어 위치가 합류 지점이지만 플레이어가 정한 것이 아니므로 '미지정' 상태로 둔다(V2-IMPL-08).
+    void RegisterSurvivor(SurvivorState _survivor, SurvivorUnit _unit, Vector3 _defensePoint, bool _defenseAssigned = true)
+    {
+        survivors.Add(_survivor);
+        board.Register(_survivor, new DefenseAssignment(_defensePoint.x, _defensePoint.z), _defenseAssigned);
+        unitsById.Add(_survivor.Id, _unit);
+        units.Add(_unit);
+        _unit.Bind(_survivor, table.survivorCombat);
+        _unit.ShowDefenseMarker(_defensePoint);
+    }
+
+    // 방문·구조·디버그가 모두 거치는 유일한 합류 경로. 합류 지점에 Survivor.prefab을 Instantiate하고
+    // 합류 지점을 초기 방어 위치로 둔다(V2-IMPL-08). 상한·비용 판정은 호출 측에서 RecruitmentSystem으로 한다.
+    // 후보 ID는 재사용하지 않고 세션 순번으로 새로 발급한다(V2-IMPL-09).
+    SurvivorState JoinSurvivor(SurvivorData _candidate, string _source)
+    {
+        var data = new SurvivorData
+        {
+            id = recruitment.IssueNewId(),
+            displayName = _candidate.displayName,
+            combat = _candidate.combat,
+            work = _candidate.work,
+            exploration = _candidate.exploration,
+            maxHp = _candidate.maxHp,
+            trait = _candidate.trait,
+        };
+        var survivor = new SurvivorState(data, _newJoin: true);
+        SurvivorUnit unit = Instantiate(survivorPrefab, joinPoint.position, Quaternion.identity, survivorRoot);
+        unit.name = "Survivor_Joined" + data.id;
+        DefenseMarkerView marker = Instantiate(defenseMarkerPrefab, joinPoint.position, Quaternion.identity, survivorRoot);
+        marker.name = "DefenseMarker_" + data.id;
+        unit.SetDefenseMarker(marker);
+        RegisterSurvivor(survivor, unit, joinPoint.position, _defenseAssigned: false);
+        RaiseAssignment(survivor.Id);
+        GameEvents.RaiseSurvivorJoined(survivor.Id, _source);
+        if (flow.Phase == SessionPhase.Prep)
+        {
+            ApplyPeacetimeOrder(unit);
+        }
+        else
+        {
+            OrderToDefense(unit);
+        }
+        return survivor;
+    }
+
+    // 방문 영입의 유일한 권위 경로. 순서: 방문 대기 → 상한 → 스크랩 차감 → 공통 합류.
+    // 실패하면 자원·인원이 바뀌지 않고 사유를 돌려준다. no_scrap·full은 방문자가 대기한 상태로 남는다.
+    public bool TryRecruitVisitor(out string _error)
+    {
+        VisitorRecord visitor = recruitment.PendingVisitor;
+        if (visitor == null)
+        {
+            _error = "대기 중인 방문자가 없습니다.";
+            return false;
+        }
+        if (Phase != SessionPhase.Prep)
+        {
+            _error = "영입은 준비 단계에만 할 수 있습니다.";
+            return false;
+        }
+        if (!recruitment.HasCapacity(AliveCount))
+        {
+            _error = "수용 정원이 찼습니다.";
+            GameEvents.RaiseRecruitmentRejected(RecruitmentSystem.REASON_FULL);
+            return false;
+        }
+        if (!economy.TrySpend(recruitment.VisitorCost))
+        {
+            _error = "스크랩이 부족합니다.";
+            GameEvents.RaiseRecruitmentRejected(RecruitmentSystem.REASON_NO_SCRAP);
+            return false;
+        }
+        JoinSurvivor(visitor.Candidate, RecruitmentSystem.SOURCE_VISITOR);
+        visitor.Status = VisitorStatus.Accepted;
+        GameEvents.RaiseRecruitmentAccepted(visitor.Candidate.id, recruitment.VisitorCost, AliveCount);
+        _error = null;
+        return true;
+    }
+
+    // 방문자를 보낸다. 대기 중일 때만 거절로 기록된다.
+    public bool DeclineVisitor()
+    {
+        if (!recruitment.DeclineVisitor())
+        {
+            return false;
+        }
+        GameEvents.RaiseRecruitmentRejected(RecruitmentSystem.REASON_DECLINED);
+        return true;
+    }
+
     // ── 건설 ──
     // 건설 패널과 PocDebug가 호출한다. 격자에 맞춘 위치에 프리팹을 놓는다. 허용 구역과 충돌은 모든 호출에서 동일하게 판정한다.
     public bool TryPlaceBuilding(BuildingType _type, Vector3 _position, Quaternion _rotation, out BuildingBase _building, out string _error)
@@ -1003,6 +1117,25 @@ public sealed class GameSession : MonoBehaviour
         {
             unit.Kill(CAUSE_DEBUG);
         }
+    }
+
+    // 디버그 전용: 구조 몫 후보를 공통 합류 경로로 바로 붙인다. 상한 판정은 방문 영입과 같다.
+    public bool DebugJoinSurvivor(out string _error)
+    {
+        if (!recruitment.HasCapacity(AliveCount))
+        {
+            _error = "수용 정원이 찼습니다.";
+            return false;
+        }
+        SurvivorData candidate = recruitment.TakeRescueCandidate();
+        if (candidate == null)
+        {
+            _error = "남은 후보가 없습니다.";
+            return false;
+        }
+        JoinSurvivor(candidate, CAUSE_DEBUG);
+        _error = null;
+        return true;
     }
 
     public void DebugRestartWave()

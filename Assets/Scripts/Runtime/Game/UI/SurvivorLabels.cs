@@ -23,8 +23,21 @@ public static class SurvivorLabels
 
     public static string Work(WorkAssignment _work) => _work == WorkAssignment.Production ? "생산" : "방어 대기";
 
-    public static string Defense(DefenseAssignment _defense)
+    // 특성 키의 표시 이름. 키 집합은 GameTableRules.TRAIT_KEYS와 같다. 효과는 G4에서 붙는다.
+    public static string Trait(string _trait) => _trait switch
     {
+        "marksman" => "사격 전문",
+        "foreman" => "숙련 작업자",
+        "scout" => "정찰 전문가",
+        _ => "없음",
+    };
+
+    public static string Defense(DefenseAssignment _defense, bool _assigned = true)
+    {
+        if (!_assigned)
+        {
+            return "방어 위치 미지정";
+        }
         string point = string.Format(CultureInfo.InvariantCulture, "({0:0}, {1:0})", _defense.x, _defense.z);
         return _defense.IsTower ? "감시탑 " + point : "지점 " + point;
     }

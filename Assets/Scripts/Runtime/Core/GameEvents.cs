@@ -158,6 +158,45 @@ public static class GameEvents
             cause = _cause;
         }
     }
+    // 필드 이름은 기준서 7.4의 로그 항목을 따른다.
+    public readonly struct VisitorArrivedInfo
+    {
+        public readonly string candidateId;
+        public readonly int wave;
+        public VisitorArrivedInfo(string _candidateId, int _wave)
+        {
+            candidateId = _candidateId;
+            wave = _wave;
+        }
+    }
+    public readonly struct RecruitmentAcceptedInfo
+    {
+        public readonly string candidateId;
+        public readonly int cost, aliveCount;
+        public RecruitmentAcceptedInfo(string _candidateId, int _cost, int _aliveCount)
+        {
+            candidateId = _candidateId;
+            cost = _cost;
+            aliveCount = _aliveCount;
+        }
+    }
+    public readonly struct RecruitmentRejectedInfo
+    {
+        public readonly string reason;
+        public RecruitmentRejectedInfo(string _reason)
+        {
+            reason = _reason;
+        }
+    }
+    public readonly struct SurvivorJoinedInfo
+    {
+        public readonly string newId, source;
+        public SurvivorJoinedInfo(string _newId, string _source)
+        {
+            newId = _newId;
+            source = _source;
+        }
+    }
 
     // ── POC 이벤트 ──
     public static event Action<SessionStartInfo> SessionStarted;
@@ -170,6 +209,10 @@ public static class GameEvents
     public static event Action<WaveStartInfo> WaveStarted;
     public static event Action<WaveEndInfo> WaveEnded;
     public static event Action<SurvivorDeathInfo> SurvivorDied;
+    public static event Action<VisitorArrivedInfo> VisitorArrived;
+    public static event Action<RecruitmentAcceptedInfo> RecruitmentAccepted;
+    public static event Action<RecruitmentRejectedInfo> RecruitmentRejected;
+    public static event Action<SurvivorJoinedInfo> SurvivorJoined;
 
     public static void RaiseSessionStarted(int _seed) => Emit(SessionStarted, new SessionStartInfo(_seed));
     public static void RaiseSessionEnded(SessionResult _result, string _reason) => Emit(SessionEnded, new SessionEndInfo(_result, _reason));
@@ -181,6 +224,10 @@ public static class GameEvents
     public static void RaiseWaveStarted(int _waveIndex) => Emit(WaveStarted, new WaveStartInfo(_waveIndex));
     public static void RaiseWaveEnded(int _waveIndex, float _coreHp, int _alive, int _scrap) => Emit(WaveEnded, new WaveEndInfo(_waveIndex, _coreHp, _alive, _scrap));
     public static void RaiseSurvivorDied(string _survivorId, string _cause) => Emit(SurvivorDied, new SurvivorDeathInfo(_survivorId, _cause));
+    public static void RaiseVisitorArrived(string _candidateId, int _wave) => Emit(VisitorArrived, new VisitorArrivedInfo(_candidateId, _wave));
+    public static void RaiseRecruitmentAccepted(string _candidateId, int _cost, int _aliveCount) => Emit(RecruitmentAccepted, new RecruitmentAcceptedInfo(_candidateId, _cost, _aliveCount));
+    public static void RaiseRecruitmentRejected(string _reason) => Emit(RecruitmentRejected, new RecruitmentRejectedInfo(_reason));
+    public static void RaiseSurvivorJoined(string _newId, string _source) => Emit(SurvivorJoined, new SurvivorJoinedInfo(_newId, _source));
 
     // ── 이벤트 ──
     public static event Action<RunInfo> RunStarted;
@@ -248,6 +295,10 @@ public static class GameEvents
         WaveStarted = null;
         WaveEnded = null;
         SurvivorDied = null;
+        VisitorArrived = null;
+        RecruitmentAccepted = null;
+        RecruitmentRejected = null;
+        SurvivorJoined = null;
         SEQUENCE = 0;
         SceneManager.sceneLoaded -= OnSceneLoaded;
         HOOKED = false;

@@ -17,6 +17,10 @@ public sealed class LogGameLifecycle : MonoBehaviour
         GameEvents.SurvivorDied += OnSurvivorDied;
         GameEvents.WaveEnded += OnWaveEnded;
         GameEvents.SessionEnded += OnSessionEnded;
+        GameEvents.VisitorArrived += OnVisitorArrived;
+        GameEvents.RecruitmentAccepted += OnRecruitmentAccepted;
+        GameEvents.RecruitmentRejected += OnRecruitmentRejected;
+        GameEvents.SurvivorJoined += OnSurvivorJoined;
         LogKitSetup.BeforeShutdown += EndForQuit;
     }
 
@@ -31,6 +35,10 @@ public sealed class LogGameLifecycle : MonoBehaviour
         GameEvents.SurvivorDied -= OnSurvivorDied;
         GameEvents.WaveEnded -= OnWaveEnded;
         GameEvents.SessionEnded -= OnSessionEnded;
+        GameEvents.VisitorArrived -= OnVisitorArrived;
+        GameEvents.RecruitmentAccepted -= OnRecruitmentAccepted;
+        GameEvents.RecruitmentRejected -= OnRecruitmentRejected;
+        GameEvents.SurvivorJoined -= OnSurvivorJoined;
         LogKitSetup.BeforeShutdown -= EndForQuit;
         EndForQuit();
     }
@@ -109,6 +117,38 @@ public sealed class LogGameLifecycle : MonoBehaviour
         Write("WaveEnded", new Dictionary<string, object>
         {
             { "index", _info.waveIndex }, { "coreHP", _info.coreHp }, { "alive", _info.alive }, { "scrap", _info.scrap }
+        });
+    }
+
+    void OnVisitorArrived(GameEvents.VisitorArrivedInfo _info)
+    {
+        Write("VisitorArrived", new Dictionary<string, object>
+        {
+            { "candidateId", _info.candidateId }, { "wave", _info.wave }
+        });
+    }
+
+    void OnRecruitmentAccepted(GameEvents.RecruitmentAcceptedInfo _info)
+    {
+        Write("RecruitmentAccepted", new Dictionary<string, object>
+        {
+            { "candidateId", _info.candidateId }, { "cost", _info.cost }, { "aliveCount", _info.aliveCount }
+        });
+    }
+
+    void OnRecruitmentRejected(GameEvents.RecruitmentRejectedInfo _info)
+    {
+        Write("RecruitmentRejected", new Dictionary<string, object>
+        {
+            { "reason", _info.reason }
+        });
+    }
+
+    void OnSurvivorJoined(GameEvents.SurvivorJoinedInfo _info)
+    {
+        Write("SurvivorJoined", new Dictionary<string, object>
+        {
+            { "newId", _info.newId }, { "source", _info.source }
         });
     }
 

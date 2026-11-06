@@ -19,11 +19,13 @@ public sealed class HudPresenter
         string countdown = HasTimer(session.Phase) ? $"{Mathf.CeilToInt(session.PhaseRemaining)}초" : "-";
         string scrap = $"스크랩 {session.Scrap}";
         string core = $"핵심 시설 {Mathf.CeilToInt(session.Core.Hp)}/{Mathf.CeilToInt(session.Core.MaxHp)}";
+        // 인원 현재/최대는 파견·중상 인원을 포함한 살아 있는 수 기준이다.
         int away = session.AwayCount;
         string survivors = away > 0
-            ? $"생존자 {session.AliveCount}/{session.Units.Count} (파견 {away})"
-            : $"생존자 {session.AliveCount}/{session.Units.Count}";
+            ? $"인원 {session.AliveCount}/{session.Capacity} (파견 {away})"
+            : $"인원 {session.AliveCount}/{session.Capacity}";
         view.ShowSpeed(session.SpeedOptions, session.Speed);
+        view.ShowVisitorNotice(session.Recruitment.PendingVisitor != null);
         view.Show(wave, countdown, scrap, core, survivors);
     }
 

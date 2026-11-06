@@ -183,7 +183,7 @@ public sealed class ReviewRegressionTests
     {
         var session = host.AddComponent<GameSession>();
         var unit = CreateSurvivor();
-        Set(session, "units", new[] { unit });
+        Set(session, "units", new List<SurvivorUnit> { unit });
         var map = (Dictionary<string, SurvivorUnit>)typeof(GameSession).GetField("unitsById", PRIVATE_INSTANCE).GetValue(session);
         map.Add(unit.State.Id, unit);
         var input = host.AddComponent<RTSInput>();
@@ -210,7 +210,7 @@ public sealed class ReviewRegressionTests
         flow.Advance();
         flow.Advance();
         core.Initialize(table.core.maxHp);
-        Set(session, "units", new[] { unit });
+        Set(session, "units", new List<SurvivorUnit> { unit });
         Set(session, "core", core);
         Set(session, "flow", flow);
         Set(session, "economy", new ResourceEconomy(table.session.startScrap, table.production.scrapPerSecondPerWork));

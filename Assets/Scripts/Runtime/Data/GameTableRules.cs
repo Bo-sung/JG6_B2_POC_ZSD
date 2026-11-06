@@ -14,6 +14,9 @@ public sealed class GameTableRules
     const int STAT_MIN = 1;
     const int STAT_MAX = 5;
 
+    // 특성 키. 표시 이름은 SurvivorLabels.Trait가 같은 키를 해석한다. 효과는 G4에서 구현한다.
+    public static readonly string[] TRAIT_KEYS = { "marksman", "foreman", "scout" };
+
     public bool IsValid { get; private set; } = true;
 
     void Check(bool _condition, string _path, string _rule)
@@ -138,6 +141,7 @@ public sealed class GameTableRules
 
         ValidateSession(_tables.Gameplay);
         ValidateSurvivors(_tables.Gameplay);
+        ValidateRecruitment(_tables.Gameplay);
         ValidateBuildings(_tables.Gameplay.buildings);
         ValidateWaves(_tables.Gameplay);
         ValidateExpeditions(_tables.Gameplay);
@@ -217,6 +221,62 @@ public sealed class GameTableRules
             Positive(survivor.maxHp, path + ".maxHp");
         }
     }
+
+    // 인력 수급. 후보는 방문 몫과 구조 몫에 쓰이므로 방문 수 이상이 필요하고(V2-IMPL-09),
+    // 초기 인원은 capacity 안에 들어와야 한다. 방문 웨이브가 현재 웨이브 수를 넘는 것은
+    // G5(6웨이브)까지 열려 있는 값이므로 여기서 막지 않는다.
+    void ValidateRecruitment(GameplayTableData _gameplay)
+    {
+        var data = _gameplay.recruitment;
+        if (data == null)
+        {
+            Check(false, "Gameplay.recruitment", "recruitment 설정이 필요합니다.");
+            return;
+        }
+        Check(data.capacity >= (_gameplay.survivors ?? Array.Empty<SurvivorData>()).Length, "Gameplay.recruitment.capacity", "초기 인원 이상이어야 합니다.");
+        Check(data.capacity >= 1, "Gameplay.recruitment.capacity", "1 이상이어야 합니다.");
+        Nonnegative(data.visitorCost, "Gameplay.recruitment.visitorCost");
+        var waves = data.visitorWaves ?? Array.Empty<int>();
+        Check(waves.Length > 0, "Gameplay.recruitment.visitorWaves", "방문 웨이브가 필요합니다.");
+        var seenWaves = new HashSet<int>();
+        foreach (int wave in waves)
+        {
+            Check(wave >= 1, "Gameplay.recruitment.visitorWaves", "웨이브 번호는 1 이상이어야 합니다.");
+            Check(seenWaves.Add(wave), "Gameplay.recruitment.visitorWaves", "방문 웨이브가 중복되었습니다.");
+        }
+
+        var candidates = data.candidates ?? Array.Empty<SurvivorData>();
+        Check(candidates.Length >= waves.Length, "Gameplay.recruitment.candidates", "후보 수는 방문 수 이상이어야 합니다.");
+        Index(candidates, _entry => _entry.id, "Gameplay.recruitment.candidates");
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var survivor in _gameplay.survivors ?? Array.Empty<SurvivorData>())
+        {
+            // 초기 인원과 후보가 같은 이름을 쓰면 목록에서 구별할 수 없다.
+            if (survivor != null && !string.IsNullOrEmpty(survivor.displayName))
+            {
+                seenNames.Add(survivor.displayName);
+            }
+        }
+        foreach (var candidate in candidates)
+        {
+            if (candidate == null || string.IsNullOrEmpty(candidate.id))
+            {
+                continue;
+            }
+
+            string path = "Gameplay.recruitment.candidates." + candidate.id;
+            Check(!string.IsNullOrEmpty(candidate.displayName), path + ".displayName", "이름이 필요합니다.");
+            Check(seenNames.Add(candidate.displayName), path + ".displayName", "이름이 중복되었습니다.");
+            IntRange(candidate.combat, STAT_MIN, STAT_MAX, path + ".combat");
+            IntRange(candidate.work, STAT_MIN, STAT_MAX, path + ".work");
+            IntRange(candidate.exploration, STAT_MIN, STAT_MAX, path + ".exploration");
+            Positive(candidate.maxHp, path + ".maxHp");
+            Check(IsKnownTrait(candidate.trait), path + ".trait", $"특성 키는 비어 있거나 {string.Join(", ", TRAIT_KEYS)} 중 하나여야 합니다: {candidate.trait}");
+        }
+    }
+
+    // 초기 인원의 특성도 같은 키 집합으로 검사한다. 효과는 G4에서 붙는다.
+    static bool IsKnownTrait(string _trait) => string.IsNullOrEmpty(_trait) || Array.IndexOf(TRAIT_KEYS, _trait) >= 0;
 
     void ValidateBuildings(BuildingsData _buildings)
     {

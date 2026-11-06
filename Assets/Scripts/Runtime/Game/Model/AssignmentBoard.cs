@@ -27,6 +27,8 @@ public sealed class AssignmentBoard
         public SurvivorState survivor;
         public WorkAssignment work;
         public DefenseAssignment defense;
+        // 합류 인력은 합류 지점을 방어 위치로 가지지만 플레이어가 정한 게 아니므로 '미지정'으로 표시한다(V2-IMPL-08).
+        public bool defenseAssigned;
     }
 
     readonly Dictionary<string, Entry> entries = new Dictionary<string, Entry>(StringComparer.Ordinal);
@@ -44,19 +46,20 @@ public sealed class AssignmentBoard
 
     public int MaxWorkers => maxWorkers;
 
-    public void Register(SurvivorState _survivor, DefenseAssignment _defense)
+    public void Register(SurvivorState _survivor, DefenseAssignment _defense, bool _defenseAssigned = true)
     {
         if (_survivor == null)
         {
             throw new ArgumentNullException(nameof(_survivor));
         }
-        var entry = new Entry { survivor = _survivor, work = WorkAssignment.DefenseStandby, defense = _defense };
+        var entry = new Entry { survivor = _survivor, work = WorkAssignment.DefenseStandby, defense = _defense, defenseAssigned = _defenseAssigned };
         entries.Add(_survivor.Id, entry);
         ordered.Add(entry);
     }
 
     public WorkAssignment WorkOf(string _id) => entries[_id].work;
     public DefenseAssignment DefenseOf(string _id) => entries[_id].defense;
+    public bool IsDefenseAssigned(string _id) => entries[_id].defenseAssigned;
 
     // 정원은 지금 거점에서 일할 수 있는 인원만 센다. 파견 중인 작업자의 자리는 다른 인원이 맡을 수 있다.
     public int ActiveWorkerCount
@@ -101,6 +104,7 @@ public sealed class AssignmentBoard
             return false;
         }
         entry.defense = new DefenseAssignment(_x, _z);
+        entry.defenseAssigned = true;
         return true;
     }
 
@@ -125,6 +129,7 @@ public sealed class AssignmentBoard
             }
         }
         entry.defense = new DefenseAssignment(_x, _z, _towerId);
+        entry.defenseAssigned = true;
         return true;
     }
 

@@ -50,13 +50,14 @@ public sealed class ExpeditionPanelTests
         Set(session, "expeditions", new ExpeditionSystem(table.expeditions, new System.Random(1)));
         var board = new AssignmentBoard(table.production.maxWorkers);
         Set(session, "board", board);
-        var units = new SurvivorUnit[table.survivors.Length];
+        var units = new List<SurvivorUnit>();
         var map = (Dictionary<string, SurvivorUnit>)typeof(GameSession).GetField("unitsById", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(session);
         states.Clear();
-        for (int index = 0; index < units.Length; index++)
+        for (int index = 0; index < table.survivors.Length; index++)
         {
             var go = new GameObject("Unit"); go.SetActive(false); go.transform.SetParent(host.transform);
-            units[index] = go.AddComponent<SurvivorUnit>();
+            var unit = go.AddComponent<SurvivorUnit>();
+            units.Add(unit);
             var state = new SurvivorState(table.survivors[index]);
             states.Add(state);
             Set(units[index], "<State>k__BackingField", state);
@@ -64,9 +65,9 @@ public sealed class ExpeditionPanelTests
             map.Add(state.Id, units[index]);
         }
         Set(session, "units", units);
-        var buttons = new Button[units.Length];
-        var labels = new Text[units.Length];
-        for (int index = 0; index < units.Length; index++)
+        var buttons = new Button[units.Count];
+        var labels = new Text[units.Count];
+        for (int index = 0; index < units.Count; index++)
         {
             buttons[index] = Button(); labels[index] = Label();
         }

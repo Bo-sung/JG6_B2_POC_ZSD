@@ -70,7 +70,7 @@ public sealed class SelectionPanelPresenter
             $"{state.DisplayName} · {SurvivorLabels.Specialty(state.Specialty)}  HP {Mathf.CeilToInt(state.Hp)}/{Mathf.CeilToInt(state.MaxHp)}",
             $"전투 {state.Combat}   작업 {state.Work}   탐사 {state.Exploration}\n사거리 {_unit.AttackRange:0.0}m · 초당 피해 {_unit.DamagePerSecond:0.#}",
             $"작업 배정: {SurvivorLabels.Work(session.Assignments.WorkOf(state.Id))}",
-            $"방어 배정: {SurvivorLabels.Defense(session.Assignments.DefenseOf(state.Id))}",
+            $"방어 배정: {SurvivorLabels.Defense(session.Assignments.DefenseOf(state.Id), session.Assignments.IsDefenseAssigned(state.Id))}",
             $"현재 행동: {SurvivorLabels.Action(_unit)}",
             _message);
     }

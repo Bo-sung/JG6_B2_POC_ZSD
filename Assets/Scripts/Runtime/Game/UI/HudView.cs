@@ -9,9 +9,12 @@ public sealed class HudView : MonoBehaviour
     [SerializeField] UnityEngine.UI.Text scrapText;
     [SerializeField] UnityEngine.UI.Text coreText;
     [SerializeField] UnityEngine.UI.Text survivorText;
+    // 방문 대기 중에만 켜지는 '방문자 도착' 항목.
+    [SerializeField] UnityEngine.UI.Button visitorButton;
 
     [SerializeField] UnityEngine.UI.Button[] speedButtons;
     public event System.Action<int> SpeedClicked;
+    public event System.Action VisitorClicked;
 
     void Awake()
     {
@@ -20,6 +23,7 @@ public sealed class HudView : MonoBehaviour
             int option = index;
             speedButtons[index].onClick.AddListener(() => SpeedClicked?.Invoke(option));
         }
+        visitorButton.onClick.AddListener(() => VisitorClicked?.Invoke());
     }
 
     public void ShowSpeed(System.Collections.Generic.IReadOnlyList<float> _options, float _speed)
@@ -43,5 +47,11 @@ public sealed class HudView : MonoBehaviour
         scrapText.text = _scrap;
         coreText.text = _core;
         survivorText.text = _survivors;
+    }
+
+    // 방문 대기 중에만 '방문자 도착' 항목을 켠다.
+    public void ShowVisitorNotice(bool _visible)
+    {
+        visitorButton.gameObject.SetActive(_visible);
     }
 }

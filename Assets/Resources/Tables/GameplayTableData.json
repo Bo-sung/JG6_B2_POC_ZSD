@@ -28,14 +28,29 @@
     "towerDamageMultiplier": 1.5
   },
   "survivors": [
-    { "id": "s1", "displayName": "서준", "combat": 5, "work": 1, "exploration": 2, "maxHp": 120 },
-    { "id": "s2", "displayName": "하윤", "combat": 4, "work": 2, "exploration": 2, "maxHp": 110 },
-    { "id": "s3", "displayName": "도현", "combat": 1, "work": 5, "exploration": 2, "maxHp": 90 },
-    { "id": "s4", "displayName": "지우", "combat": 2, "work": 4, "exploration": 1, "maxHp": 90 },
-    { "id": "s5", "displayName": "유나", "combat": 2, "work": 1, "exploration": 5, "maxHp": 90 },
-    { "id": "s6", "displayName": "민재", "combat": 3, "work": 3, "exploration": 3, "maxHp": 100 },
-    { "id": "s7", "displayName": "수아", "combat": 3, "work": 2, "exploration": 3, "maxHp": 100 }
+    { "id": "s1", "displayName": "서준", "combat": 5, "work": 1, "exploration": 2, "maxHp": 120, "trait": "" },
+    { "id": "s2", "displayName": "하윤", "combat": 4, "work": 2, "exploration": 2, "maxHp": 110, "trait": "" },
+    { "id": "s3", "displayName": "도현", "combat": 1, "work": 5, "exploration": 2, "maxHp": 90, "trait": "" },
+    { "id": "s4", "displayName": "지우", "combat": 2, "work": 4, "exploration": 1, "maxHp": 90, "trait": "" },
+    { "id": "s5", "displayName": "유나", "combat": 2, "work": 1, "exploration": 5, "maxHp": 90, "trait": "" },
+    { "id": "s6", "displayName": "민재", "combat": 3, "work": 3, "exploration": 3, "maxHp": 100, "trait": "" },
+    { "id": "s7", "displayName": "수아", "combat": 3, "work": 2, "exploration": 3, "maxHp": 100, "trait": "" }
   ],
+  "recruitment": {
+    "capacity": 9,
+    "visitorCost": 5,
+    "visitorWaves": [2, 4],
+    "candidates": [
+      { "id": "c1", "displayName": "태양", "combat": 4, "work": 2, "exploration": 2, "maxHp": 110, "trait": "marksman" },
+      { "id": "c2", "displayName": "바다", "combat": 2, "work": 4, "exploration": 2, "maxHp": 95, "trait": "foreman" },
+      { "id": "c3", "displayName": "하늘", "combat": 2, "work": 2, "exploration": 4, "maxHp": 95, "trait": "scout" },
+      { "id": "c4", "displayName": "가온", "combat": 3, "work": 3, "exploration": 2, "maxHp": 100, "trait": "" },
+      { "id": "c5", "displayName": "다래", "combat": 1, "work": 4, "exploration": 3, "maxHp": 90, "trait": "foreman" },
+      { "id": "c6", "displayName": "루카", "combat": 3, "work": 1, "exploration": 4, "maxHp": 100, "trait": "scout" },
+      { "id": "c7", "displayName": "세나", "combat": 5, "work": 1, "exploration": 1, "maxHp": 115, "trait": "marksman" },
+      { "id": "c8", "displayName": "이안", "combat": 2, "work": 3, "exploration": 2, "maxHp": 90, "trait": "" }
+    ]
+  },
   "buildings": {
     "gridSize": 2,
     "wall": { "cost": 4, "maxHp": 120 },

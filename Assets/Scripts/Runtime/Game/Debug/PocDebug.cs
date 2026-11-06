@@ -106,6 +106,15 @@ public sealed class PocDebug : MonoBehaviour
         }
     }
 
+    [ContextMenu("디버그 합류(구조 몫)")]
+    public void DebugJoinSurvivor()
+    {
+        if (!session.DebugJoinSurvivor(out string error))
+        {
+            Debug.LogWarning($"디버그 합류 실패: {error}");
+        }
+    }
+
     [ContextMenu("웨이브 재시작")]
     public void RestartWave() => session.DebugRestartWave();
 }

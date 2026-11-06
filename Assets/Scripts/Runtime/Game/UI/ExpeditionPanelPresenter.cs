@@ -29,6 +29,10 @@ public sealed class ExpeditionPanelPresenter
 
     void Toggle(int _index)
     {
+        if (_index >= session.Units.Count)
+        {
+            return;
+        }
         string id = session.Units[_index].State.Id;
         if (!session.FindUnit(id).State.CanAct)
         {
@@ -60,8 +64,15 @@ public sealed class ExpeditionPanelPresenter
         selected.RemoveAll(_id => !session.FindUnit(_id).State.CanAct);
         ExpeditionRegionData region = regions[regionIndex];
         int exploration = 0;
-        for (int index = 0; index < session.Units.Count; index++)
+        for (int index = 0; index < view.MemberCount; index++)
         {
+            // 합류로 인원이 늘어도 9행 안에서 표시된다. 빈 행은 숨긴다.
+            if (index >= session.Units.Count)
+            {
+                view.SetMemberVisible(index, false);
+                continue;
+            }
+            view.SetMemberVisible(index, true);
             SurvivorState state = session.Units[index].State;
             bool chosen = selected.Contains(state.Id);
             if (chosen)
@@ -69,7 +80,7 @@ public sealed class ExpeditionPanelPresenter
                 exploration += state.Exploration;
             }
             string duty = !state.IsAlive ? "사망" : state.IsAway ? $"탐사 {Mathf.CeilToInt(session.ExpeditionRemaining(state.Id))}초" : SurvivorLabels.Work(session.Assignments.WorkOf(state.Id));
-            view.ShowMember(index, $"{(chosen ? "[선택]" : "[  ]")} {state.DisplayName} · 탐사 {state.Exploration} · {duty}", state.CanAct);
+            view.ShowMember(index, $"{(chosen ? "[선택]" : "[  ]")} {state.DisplayName}{(state.IsNewJoin ? " · 신규" : "")} · 탐사 {state.Exploration} · {duty}", state.CanAct);
         }
         float rewardChance = session.Expeditions.RewardChance(region.id, exploration);
         if (selected.Count == 1)

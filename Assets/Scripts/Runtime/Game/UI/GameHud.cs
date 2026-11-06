@@ -19,6 +19,9 @@ public sealed class GameHud : MonoBehaviour
     [SerializeField] ExpeditionPanelView expeditionView;
     ExpeditionPanelPresenter expedition;
 
+    [SerializeField] VisitorPanelView visitorView;
+    VisitorPanelPresenter visitor;
+
     HudPresenter hud;
     SurvivorListPresenter list;
     SelectionPanelPresenter selection;
@@ -35,6 +38,8 @@ public sealed class GameHud : MonoBehaviour
         selection = new SelectionPanelPresenter(selectionView, session, input);
         alert = new AlertPresenter(alertView, session);
         result = new ResultPresenter(resultView, session);
+        visitor = new VisitorPanelPresenter(visitorView, session);
+        hudView.VisitorClicked += visitor.OpenPanel;
         GameEvents.SurvivorDied += alert.OnSurvivorDied;
         GameEvents.ExpeditionResolved += alert.OnExpeditionResolved;
     }
@@ -45,6 +50,10 @@ public sealed class GameHud : MonoBehaviour
         {
             GameEvents.SurvivorDied -= alert.OnSurvivorDied;
             GameEvents.ExpeditionResolved -= alert.OnExpeditionResolved;
+        }
+        if (hud != null)
+        {
+            hudView.VisitorClicked -= visitor.OpenPanel;
         }
     }
 
@@ -61,5 +70,6 @@ public sealed class GameHud : MonoBehaviour
         selection.Refresh();
         alert.Refresh();
         result.Refresh();
+        visitor.Refresh();
     }
 }

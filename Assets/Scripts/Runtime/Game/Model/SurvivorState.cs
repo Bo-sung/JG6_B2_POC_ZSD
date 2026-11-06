@@ -29,6 +29,9 @@ public sealed class SurvivorState
     public int Work { get; }
     public int Exploration { get; }
     public SurvivorSpecialty Specialty { get; }
+    public string Trait { get; }
+    // 합류 인원은 목록에서 '· 신규'로 구별한다. 초기 인원은 false다.
+    public bool IsNewJoin { get; }
     public float MaxHp { get; }
     public float Hp { get; private set; }
     public SurvivorActivity Activity { get; private set; }
@@ -37,7 +40,7 @@ public sealed class SurvivorState
     public bool IsAway => Activity == SurvivorActivity.Away;
     public bool CanAct => IsAlive && !IsAway;
 
-    public SurvivorState(SurvivorData _data)
+    public SurvivorState(SurvivorData _data, bool _newJoin = false)
     {
         if (_data == null)
         {
@@ -48,12 +51,20 @@ public sealed class SurvivorState
         Combat = _data.combat;
         Work = _data.work;
         Exploration = _data.exploration;
-        Specialty = Combat > Work && Combat > Exploration ? SurvivorSpecialty.Combat
-            : Work > Combat && Work > Exploration ? SurvivorSpecialty.Work
-            : Exploration > Combat && Exploration > Work ? SurvivorSpecialty.Exploration : SurvivorSpecialty.General;
+        Specialty = SpecialtyOf(Combat, Work, Exploration);
+        Trait = _data.trait ?? string.Empty;
+        IsNewJoin = _newJoin;
         MaxHp = _data.maxHp;
         Hp = _data.maxHp;
         Activity = SurvivorActivity.Guarding;
+    }
+
+    // 최고 능력치가 하나면 그 분야 특화이고, 같은 최고값이 여러 개면 범용이다.
+    public static SurvivorSpecialty SpecialtyOf(int _combat, int _work, int _exploration)
+    {
+        return _combat > _work && _combat > _exploration ? SurvivorSpecialty.Combat
+            : _work > _combat && _work > _exploration ? SurvivorSpecialty.Work
+            : _exploration > _combat && _exploration > _work ? SurvivorSpecialty.Exploration : SurvivorSpecialty.General;
     }
 
     // 이번 호출로 사망했으면 true.
