@@ -58,7 +58,7 @@
 
 ## POC v2 구현 결정
 
-`POC_V2_SCOPE.md`가 정하지 않은 빈 곳을 구현 착수 시 에이전트가 메운 값이다. 불변 원칙(`INV-01~08`, V2-DEC)을 바꾸지 않으며 **사용자 확인 전 제안 상태**다. 바꾸고 싶으면 이 표를 고친다. 수치는 전부 `GameplayTableData.json`에 둔다.
+`POC_V2_SCOPE.md`가 정하지 않은 빈 곳을 구현 착수 시 에이전트가 메운 값이다. 불변 원칙(`INV-01~08`, V2-DEC)을 바꾸지 않으며 **임시 채택 상태**다(사용자 확인 전, [`PROVISIONAL_DECISIONS.md`](PROVISIONAL_DECISIONS.md) TD-01). 바꾸고 싶으면 이 표를 고친다. 수치는 전부 `GameplayTableData.json`에 둔다. 그 밖의 임시 결정도 같은 문서에 있다.
 
 | ID | 결정 | 근거 / 의도 |
 | --- | --- | --- |
