@@ -7,7 +7,8 @@
     "combatSeconds": 120,
     "timeoutCoreDamagePerEnemy": 15,
     "startScrap": 8,
-    "defaultSeed": 12345
+    "defaultSeed": 12345,
+    "speedOptions": [1, 2, 4]
   },
   "core": {
     "maxHp": 500
@@ -18,7 +19,8 @@
   },
   "survivorCombat": {
     "moveSpeed": 3,
-    "attackRange": 10,
+    "attackRange": 8,
+    "attackRangePerCombat": 0.7,
     "attackInterval": 1,
     "baseDamage": 3,
     "damagePerCombat": 3,

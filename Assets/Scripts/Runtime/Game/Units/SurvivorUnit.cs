@@ -23,6 +23,29 @@ public sealed class SurvivorUnit : MonoBehaviour
     [SerializeField] WorldLabelView nameLabel;
     [SerializeField] DefenseMarkerView defenseMarker;
 
+    [SerializeField] LineRenderer currentRange;
+    [SerializeField] LineRenderer defenseConnection;
+    [SerializeField] Transform weapon;
+    [SerializeField] Renderer bodyRenderer;
+    [SerializeField] Color combatColor = new Color(1f, 0.35f, 0.12f);
+    [SerializeField] Color workColor = new Color(0.2f, 0.7f, 1f);
+    [SerializeField] Color explorationColor = new Color(0.3f, 1f, 0.4f);
+    [SerializeField] Color generalColor = new Color(0.85f, 0.65f, 1f);
+    [SerializeField] float weaponSideOffset = 0.6f;
+    [SerializeField] float weaponLengthPerCombat = 0.55f;
+    [SerializeField] float weaponWidthPerCombat = 0.08f;
+    [SerializeField] float tracerWidthPerDps = 0.009f;
+    [SerializeField] float rangeHeight = 0.12f;
+    [SerializeField] float stationRetrySeconds = 1f;
+    [SerializeField] float stationBlockedSeconds = 3f;
+    [SerializeField] float stationProgressTolerance = 0.05f;
+    bool selected;
+    Vector3 lastProgressPosition;
+    float lastProgressTime;
+    float nextStationRetry;
+    public string MovementIssue { get; private set; } = string.Empty;
+    public bool IsHeadingToTower => station is TowerBuilding tower && tower && State.Activity == SurvivorActivity.Guarding;
+
     readonly Collider[] targetBuffer = new Collider[TARGET_BUFFER_SIZE];
     readonly RaycastHit[] sightBuffer = new RaycastHit[SIGHT_BUFFER_SIZE];
     NavMeshAgent agent;
@@ -63,7 +86,7 @@ public sealed class SurvivorUnit : MonoBehaviour
         {
             bool alive = station is Object stationObject && stationObject;
             return alive && State.CanAct && State.Activity == SurvivorActivity.Guarding && arrived
-                && Vector3.Distance(transform.position, station.StationPosition) <= arrivalTolerance ? station : null;
+                && Vector3.ProjectOnPlane(transform.position - station.StationPosition, Vector3.up).magnitude <= arrivalTolerance ? station : null;
         }
     }
 
@@ -85,6 +108,13 @@ public sealed class SurvivorUnit : MonoBehaviour
         if (State != null)
         {
             RefreshTowerVisual();
+            if (selected && State.CanAct)
+            {
+                DefenseMarkerView.DrawCircle(currentRange, transform.position, AttackRange, rangeHeight);
+                defenseConnection.SetPosition(0, new Vector3(transform.position.x, rangeHeight, transform.position.z));
+                Vector3 target = defenseMarker.transform.position;
+                defenseConnection.SetPosition(1, new Vector3(target.x, rangeHeight, target.z));
+            }
         }
     }
 
@@ -101,7 +131,7 @@ public sealed class SurvivorUnit : MonoBehaviour
 
     public bool IsProtected => ActiveStation != null && ActiveStation.ProtectsOccupant;
     Vector3 FiringOrigin => OccupiedTower ? OccupiedTower.SeatPosition : transform.position;
-    public float AttackRange => combat.attackRange + (ActiveStation != null ? ActiveStation.RangeBonus : 0);
+    public float AttackRange => GameTableRules.SurvivorRange(combat, State.Combat, ActiveStation != null ? ActiveStation.RangeBonus : 0);
 
     // GameSession.Awake에서 호출되므로 이 컴포넌트의 Awake 순서에 기대지 않는다.
     public void Bind(SurvivorState _state, SurvivorCombatData _combat)
@@ -113,6 +143,18 @@ public sealed class SurvivorUnit : MonoBehaviour
         State = _state;
         combat = _combat;
         agent.speed = _combat.moveSpeed;
+        var tint = new MaterialPropertyBlock();
+        Color color = State.Specialty switch
+        {
+            SurvivorSpecialty.Combat => combatColor,
+            SurvivorSpecialty.Work => workColor,
+            SurvivorSpecialty.Exploration => explorationColor,
+            _ => generalColor,
+        };
+        tint.SetColor("_BaseColor", color);
+        bodyRenderer.SetPropertyBlock(tint);
+        weapon.localScale = new Vector3(weaponWidthPerCombat * State.Combat, weaponWidthPerCombat * State.Combat, weaponLengthPerCombat * State.Combat);
+        weapon.localPosition = new Vector3(weaponSideOffset, 0, weapon.localScale.z * 0.5f);
         nameLabel.SetText(_state.DisplayName);
         defenseMarker.SetLabel(_state.DisplayName);
         SetSelected(false);
@@ -225,13 +267,17 @@ public sealed class SurvivorUnit : MonoBehaviour
 
     public void SetSelected(bool _selected)
     {
+        selected = _selected;
         selectionRing.SetActive(_selected);
+        currentRange.enabled = _selected;
+        defenseConnection.enabled = _selected;
         defenseMarker.SetHighlighted(_selected);
     }
 
-    public void ShowDefenseMarker(Vector3 _position)
+    public void ShowDefenseMarker(Vector3 _position, float _towerBonus = 0, Vector3? _rangeCenter = null)
     {
         defenseMarker.Place(_position);
+        defenseMarker.SetRange(GameTableRules.SurvivorRange(combat, State.Combat, _towerBonus), _rangeCenter ?? _position);
     }
 
     // ── 피해·사망 ──
@@ -269,6 +315,10 @@ public sealed class SurvivorUnit : MonoBehaviour
     void MoveTo(Vector3 _position)
     {
         arrived = false;
+        MovementIssue = string.Empty;
+        lastProgressPosition = transform.position;
+        lastProgressTime = Time.time;
+        nextStationRetry = Time.time + stationRetrySeconds;
         if (agent.isOnNavMesh)
         {
             agent.isStopped = false;
@@ -287,6 +337,7 @@ public sealed class SurvivorUnit : MonoBehaviour
 
     void ClearTargets()
     {
+        MovementIssue = string.Empty;
         autoTarget = null;
         manualTarget = null;
     }
@@ -294,6 +345,11 @@ public sealed class SurvivorUnit : MonoBehaviour
     // 막힌 위치를 지정해도 갈 수 있는 곳까지 가면 도착으로 본다(부분 경로의 끝).
     void UpdateArrival()
     {
+        if (IsHeadingToTower && !arrived)
+        {
+            UpdateStationArrival();
+            return;
+        }
         if (arrived || !agent.isOnNavMesh || agent.pathPending)
         {
             return;
@@ -304,6 +360,44 @@ public sealed class SurvivorUnit : MonoBehaviour
             if (State.Activity == SurvivorActivity.Guarding)
             {
                 LastGuardArrivalTime = Time.time;
+            }
+        }
+    }
+
+    void UpdateStationArrival()
+    {
+        float distance = Vector3.ProjectOnPlane(transform.position - station.StationPosition, Vector3.up).magnitude;
+        if (distance <= arrivalTolerance)
+        {
+            arrived = true;
+            MovementIssue = string.Empty;
+            LastGuardArrivalTime = Time.time;
+            StopAgent();
+            return;
+        }
+        if ((transform.position - lastProgressPosition).sqrMagnitude > stationProgressTolerance * stationProgressTolerance)
+        {
+            lastProgressPosition = transform.position;
+            lastProgressTime = Time.time;
+            MovementIssue = string.Empty;
+        }
+        if (Time.time - lastProgressTime >= stationBlockedSeconds)
+        {
+            MovementIssue = "탑 접근 경로가 막혔습니다 · 인력·시설을 비워 주세요(재시도 중)";
+        }
+        if (!agent.isOnNavMesh)
+        {
+            MovementIssue = "탑 접근 불가 · 걸을 수 있는 지형을 확인하세요.";
+            return;
+        }
+        if (!agent.pathPending && Time.time >= nextStationRetry)
+        {
+            nextStationRetry = Time.time + stationRetrySeconds;
+            agent.isStopped = false;
+            agent.SetDestination(station.StationPosition);
+            if (agent.pathStatus == NavMeshPathStatus.PathPartial || agent.pathStatus == NavMeshPathStatus.PathInvalid)
+            {
+                MovementIssue = "탑 접근 경로가 막혔습니다 · 인력·시설을 비워 주세요(재시도 중)";
             }
         }
     }
@@ -414,6 +508,12 @@ public sealed class SurvivorUnit : MonoBehaviour
         {
             damage *= ActiveStation.DamageMultiplier;
         }
+        Vector3 direction = Vector3.ProjectOnPlane(_enemy.transform.position - transform.position, Vector3.up);
+        if (direction.sqrMagnitude > 0)
+        {
+            visualBody.rotation = Quaternion.LookRotation(direction);
+        }
+        tracer.widthMultiplier = DamagePerSecond * tracerWidthPerDps;
         tracer.SetPosition(0, FiringOrigin + Vector3.up * sightHeight);
         tracer.SetPosition(1, _enemy.transform.position + Vector3.up * sightHeight);
         tracer.enabled = true;

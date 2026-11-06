@@ -25,7 +25,7 @@ public sealed class SurvivorListPresenter
         {
             SurvivorState state = session.Units[index].State;
             string hp = state.IsAlive ? $"HP {Mathf.CeilToInt(state.Hp)}/{Mathf.CeilToInt(state.MaxHp)}" : "HP 0";
-            view.Rows[index].Show(state.DisplayName, hp, (state.IsAway ? $"탐사 {Mathf.CeilToInt(session.ExpeditionRemaining(state.Id))}초" : SurvivorLabels.Status(state)), LookOf(state));
+            view.Rows[index].Show(state.DisplayName + " · " + SurvivorLabels.Specialty(state.Specialty).Replace(" 특화", ""), hp, (state.IsAway ? $"탐사 {Mathf.CeilToInt(session.ExpeditionRemaining(state.Id))}초" : SurvivorLabels.Status(state)), LookOf(state));
         }
     }
 

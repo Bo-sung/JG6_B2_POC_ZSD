@@ -162,6 +162,25 @@ public sealed class GameSession : MonoBehaviour
         }
     }
 
+    public float Speed { get; private set; } = 1;
+    public IReadOnlyList<float> SpeedOptions => table.session.speedOptions;
+
+    public bool SetSpeed(float _speed)
+    {
+        if (Array.IndexOf(table.session.speedOptions, _speed) < 0)
+        {
+            return false;
+        }
+        Speed = _speed;
+        Time.timeScale = _speed;
+        return true;
+    }
+
+    void OnDestroy()
+    {
+        Time.timeScale = 1;
+    }
+
     public bool CanChangeWork => SessionFlow.CanChangeWork(flow.Phase);
     public bool CanChangeDefense => SessionFlow.CanChangeDefense(flow.Phase);
     public bool CanCommand => SessionFlow.CanCommand(flow.Phase);
@@ -170,6 +189,7 @@ public sealed class GameSession : MonoBehaviour
 
     void Awake()
     {
+        Time.timeScale = 1;
         table = TableManager.Instance.RequireValid().Gameplay;
         seed = SessionLaunch.ResolveSeed(table.session.defaultSeed);
         var rng = new SessionRng(seed);
@@ -457,8 +477,17 @@ public sealed class GameSession : MonoBehaviour
         }
         RaiseAssignment(_id);
         SurvivorUnit unit = unitsById[_id];
-        unit.ShowDefenseMarker(DefensePosition(_id));
-        if (unit.State.Activity == SurvivorActivity.Guarding)
+        RefreshDefenseMarker(unit);
+        if (Phase == SessionPhase.Prep && board.WorkOf(_id) == WorkAssignment.Production)
+        {
+            // 평시 생산은 유지한다. 임시 이동 중이었다면 생산 배정으로 복귀한다.
+            if (unit.State.Activity != SurvivorActivity.Working)
+            {
+                ApplyPeacetimeOrder(unit);
+            }
+            _error = board.DefenseOf(_id).IsTower ? "생산 중 — 경보 때 탑으로 이동" : "생산 중 — 경보 때 방어 위치로 이동";
+        }
+        else
         {
             OrderToDefense(unit);
         }
@@ -485,12 +514,29 @@ public sealed class GameSession : MonoBehaviour
         }
         RaiseAssignment(_id);
         SurvivorUnit unit = unitsById[_id];
-        unit.ShowDefenseMarker(DefensePosition(_id));
-        if (unit.State.Activity == SurvivorActivity.Guarding)
+        RefreshDefenseMarker(unit);
+        if (Phase == SessionPhase.Prep && board.WorkOf(_id) == WorkAssignment.Production)
+        {
+            // 평시 생산은 유지한다. 임시 이동 중이었다면 생산 배정으로 복귀한다.
+            if (unit.State.Activity != SurvivorActivity.Working)
+            {
+                ApplyPeacetimeOrder(unit);
+            }
+            _error = board.DefenseOf(_id).IsTower ? "생산 중 — 경보 때 탑으로 이동" : "생산 중 — 경보 때 방어 위치로 이동";
+        }
+        else
         {
             OrderToDefense(unit);
         }
         return true;
+    }
+
+    void RefreshDefenseMarker(SurvivorUnit _unit)
+    {
+        string id = _unit.State.Id;
+        ICombatStation target = FindStation(board.DefenseOf(id).towerId);
+        Vector3 point = target is TowerBuilding tower ? tower.transform.position : DefensePosition(id);
+        _unit.ShowDefenseMarker(point, target != null ? target.RangeBonus : 0, DefensePosition(id));
     }
 
     public Vector3 DefensePosition(string _id)
@@ -818,6 +864,23 @@ public sealed class GameSession : MonoBehaviour
                 return false;
             }
         }
+        // 기존 탑의 접근 자리는 시설 몸체 밖이어도 보행자 반경만큼 비워 둔다.
+        foreach (BuildingBase existing in buildings)
+        {
+            if (!(existing is TowerBuilding existingTower) || !existing || existing.Hp <= 0)
+            {
+                continue;
+            }
+            Vector3 local = Quaternion.Inverse(orientation) * (existingTower.StationPosition - center);
+            float dx = Mathf.Max(0, Mathf.Abs(local.x) - half.x);
+            float dz = Mathf.Max(0, Mathf.Abs(local.z) - half.z);
+            float radius = units[0].GetComponent<UnityEngine.AI.NavMeshAgent>().radius;
+            if (dx * dx + dz * dz < radius * radius)
+            {
+                _error = "감시탑의 지상 접근 자리를 비워 주세요.";
+                return false;
+            }
+        }
         // 입력 Update와 물리 틱 사이에 이동한 시설도 동일하게 검사한다.
         Physics.SyncTransforms();
         // 접한 면은 허용하고 겹친 부피만 거부한다. 보정값은 씬에 직렬화한다.
@@ -890,7 +953,7 @@ public sealed class GameSession : MonoBehaviour
         foreach (string id in affected)
         {
             RaiseAssignment(id);
-            FindUnit(id).ShowDefenseMarker(DefensePosition(id));
+            RefreshDefenseMarker(FindUnit(id));
         }
     }
 

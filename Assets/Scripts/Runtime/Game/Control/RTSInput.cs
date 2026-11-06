@@ -44,6 +44,7 @@ public sealed class RTSInput : MonoBehaviour
             worldInputBlocked = value;
         }
     }
+    public event Action<string> CommandFeedback;
     public TowerBuilding PickedDefenseTower { get; private set; }
     public SelectionModel Selection { get; private set; }
     public bool IsPickingDefense => pendingDefensePick != null;
@@ -291,7 +292,14 @@ public sealed class RTSInput : MonoBehaviour
         {
             return;
         }
-        EnemyUnit enemy = PickComponent<EnemyUnit>(_position, GameLayers.ENEMY_MASK);
+        // 탑에 붙은 적도 공격할 수 있게 광선에서 더 가까운 쪽을 고른다.
+        TowerBuilding tower = PickComponent<TowerBuilding>(_position, GameLayers.OBSTACLE_MASK, out float towerDistance);
+        EnemyUnit enemy = PickComponent<EnemyUnit>(_position, GameLayers.ENEMY_MASK, out float enemyDistance);
+        if (tower && (!enemy || towerDistance < enemyDistance))
+        {
+            AssignDefense(tower.StationPosition, tower);
+            return;
+        }
         if (enemy)
         {
             foreach (string id in Selection.Ids)
@@ -302,8 +310,47 @@ public sealed class RTSInput : MonoBehaviour
         }
         if (TryGetGroundPoint(_position, out Vector3 point))
         {
-            IssueMove(point);
+            if (session.Phase == SessionPhase.Prep)
+            {
+                AssignDefense(point, null);
+            }
+            else if (session.CanCommand)
+            {
+                IssueMove(point);
+                CommandFeedback?.Invoke("직접 이동 · 방어 배정 유지");
+            }
+            else
+            {
+                CommandFeedback?.Invoke("결과·종료 단계에서는 명령할 수 없습니다.");
+            }
         }
+    }
+
+    public void AssignDefense(Vector3 _point, TowerBuilding _tower)
+    {
+        var notices = new List<string>();
+        IReadOnlyList<string> ids = Selection.Ids;
+        for (int index = 0; index < ids.Count; index++)
+        {
+            // 다중 선택의 두 번째 이후 인원은 기존 배정을 그대로 둔다.
+            if (_tower && index > 0)
+            {
+                if (!notices.Contains("감시탑 정원 1명 · 나머지 인원 배정 유지"))
+                {
+                    notices.Add("감시탑 정원 1명 · 나머지 인원 배정 유지");
+                }
+                continue;
+            }
+            string error;
+            bool ok = _tower ? session.TrySetDefenseStation(ids[index], _tower, out error)
+                : session.TrySetDefensePoint(ids[index], SpreadPoint(_point, index, ids.Count), out error);
+            string notice = error ?? (ok ? (_tower ? "탑 입장 지시 · 방어 배정 저장" : "방어 위치 저장 · 바로 이동") : "배정할 수 없습니다.");
+            if (!notices.Contains(notice))
+            {
+                notices.Add(notice);
+            }
+        }
+        CommandFeedback?.Invoke(string.Join("\n", notices));
     }
 
     // 여러 명은 지점 주위 원으로 펼쳐 같은 점을 두고 다투지 않게 한다.
@@ -329,10 +376,23 @@ public sealed class RTSInput : MonoBehaviour
 
     T PickComponent<T>(Vector2 _position, int _mask) where T : Component
     {
+        return PickComponent<T>(_position, _mask, out _);
+    }
+
+    T PickComponent<T>(Vector2 _position, int _mask, out float _distance) where T : Component
+    {
+        _distance = float.MaxValue;
         Ray ray = worldCamera.ScreenPointToRay(_position);
-        if (Physics.SphereCast(ray, pickRadius, out RaycastHit hit, rayDistance, _mask, QueryTriggerInteraction.Ignore))
+        RaycastHit[] hits = Physics.SphereCastAll(ray, pickRadius, rayDistance, _mask, QueryTriggerInteraction.Ignore);
+        Array.Sort(hits, (_left, _right) => _left.distance.CompareTo(_right.distance));
+        foreach (RaycastHit hit in hits)
         {
-            return hit.collider.GetComponentInParent<T>();
+            T component = hit.collider.GetComponentInParent<T>();
+            if (component)
+            {
+                _distance = hit.distance;
+                return component;
+            }
         }
         return null;
     }

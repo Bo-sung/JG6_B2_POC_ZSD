@@ -157,9 +157,27 @@ public sealed class GameTableRules
         Positive(_gameplay.session.combatSeconds, "Gameplay.session.combatSeconds");
         Nonnegative(_gameplay.session.timeoutCoreDamagePerEnemy, "Gameplay.session.timeoutCoreDamagePerEnemy");
         Nonnegative(_gameplay.session.startScrap, "Gameplay.session.startScrap");
+        ValidateSpeedOptions(_gameplay.session.speedOptions);
         Positive(_gameplay.core.maxHp, "Gameplay.core.maxHp");
         Positive(_gameplay.production.maxWorkers, "Gameplay.production.maxWorkers");
         Positive(_gameplay.production.scrapPerSecondPerWork, "Gameplay.production.scrapPerSecondPerWork");
+    }
+
+    public void ValidateSpeedOptions(float[] _options)
+    {
+        Check(_options != null && Array.IndexOf(_options, 1f) >= 0, "Gameplay.session.speedOptions", "1배를 포함해야 합니다.");
+        var seen = new HashSet<float>();
+        foreach (float option in _options ?? Array.Empty<float>())
+        {
+            Check(!float.IsNaN(option) && !float.IsInfinity(option) && option > 0 && seen.Add(option),
+                "Gameplay.session.speedOptions", "서로 다른 유한한 양수여야 합니다.");
+        }
+    }
+
+    // 지상·탑 사거리 표시와 실제 교전이 같은 순수 계산을 쓴다.
+    public static float SurvivorRange(SurvivorCombatData _combat, int _combatStat, float _towerBonus = 0)
+    {
+        return _combat.attackRange + _combat.attackRangePerCombat * _combatStat + _towerBonus;
     }
 
     void ValidateSurvivors(GameplayTableData _gameplay)
@@ -173,6 +191,7 @@ public sealed class GameTableRules
         {
             Positive(combat.moveSpeed, "Gameplay.survivorCombat.moveSpeed");
             Positive(combat.attackRange, "Gameplay.survivorCombat.attackRange");
+            Nonnegative(combat.attackRangePerCombat, "Gameplay.survivorCombat.attackRangePerCombat");
             Positive(combat.attackInterval, "Gameplay.survivorCombat.attackInterval");
             Positive(combat.baseDamage, "Gameplay.survivorCombat.baseDamage");
             Nonnegative(combat.damagePerCombat, "Gameplay.survivorCombat.damagePerCombat");

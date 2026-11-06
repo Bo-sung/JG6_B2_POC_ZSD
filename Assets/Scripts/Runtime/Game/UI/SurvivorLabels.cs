@@ -3,6 +3,14 @@ using System.Globalization;
 // 생존자 표시 문구의 단일 출처. 목록과 선택 패널이 같은 표현을 쓴다.
 public static class SurvivorLabels
 {
+    public static string Specialty(SurvivorSpecialty _specialty) => _specialty switch
+    {
+        SurvivorSpecialty.Combat => "전투 특화",
+        SurvivorSpecialty.Work => "작업 특화",
+        SurvivorSpecialty.Exploration => "탐사 특화",
+        _ => "범용",
+    };
+
     public static string Status(SurvivorState _state) => _state.Activity switch
     {
         SurvivorActivity.Working => "작업",
@@ -28,6 +36,10 @@ public static class SurvivorLabels
             case SurvivorActivity.Working:
                 return _unit.HasArrived ? "생산 작업 중" : "작업장으로 이동 중";
             case SurvivorActivity.Guarding:
+                if (_unit.IsHeadingToTower)
+                {
+                    return _unit.OccupiedTower ? (_unit.IsFiring ? "탑 위 교전 중" : "탑 위 대기") : "탑으로 이동 중";
+                }
                 if (_unit.IsFiring)
                 {
                     return "교전 중";

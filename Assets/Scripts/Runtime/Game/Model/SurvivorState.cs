@@ -11,6 +11,14 @@ public enum SurvivorActivity
     Dead,
 }
 
+public enum SurvivorSpecialty
+{
+    General,
+    Combat,
+    Work,
+    Exploration,
+}
+
 // 생존자 한 명의 규칙 상태. Unity에 의존하지 않는다.
 // 사망은 되돌릴 수 없고(INV-02), 파견 중에는 거점 행동을 할 수 없다.
 public sealed class SurvivorState
@@ -20,6 +28,7 @@ public sealed class SurvivorState
     public int Combat { get; }
     public int Work { get; }
     public int Exploration { get; }
+    public SurvivorSpecialty Specialty { get; }
     public float MaxHp { get; }
     public float Hp { get; private set; }
     public SurvivorActivity Activity { get; private set; }
@@ -39,6 +48,9 @@ public sealed class SurvivorState
         Combat = _data.combat;
         Work = _data.work;
         Exploration = _data.exploration;
+        Specialty = Combat > Work && Combat > Exploration ? SurvivorSpecialty.Combat
+            : Work > Combat && Work > Exploration ? SurvivorSpecialty.Work
+            : Exploration > Combat && Exploration > Work ? SurvivorSpecialty.Exploration : SurvivorSpecialty.General;
         MaxHp = _data.maxHp;
         Hp = _data.maxHp;
         Activity = SurvivorActivity.Guarding;

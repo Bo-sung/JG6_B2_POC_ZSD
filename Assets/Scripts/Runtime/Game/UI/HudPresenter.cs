@@ -10,6 +10,7 @@ public sealed class HudPresenter
     {
         view = _view;
         session = _session;
+        view.SpeedClicked += _index => session.SetSpeed(session.SpeedOptions[_index]);
     }
 
     public void Refresh()
@@ -22,6 +23,7 @@ public sealed class HudPresenter
         string survivors = away > 0
             ? $"생존자 {session.AliveCount}/{session.Units.Count} (파견 {away})"
             : $"생존자 {session.AliveCount}/{session.Units.Count}";
+        view.ShowSpeed(session.SpeedOptions, session.Speed);
         view.Show(wave, countdown, scrap, core, survivors);
     }
 

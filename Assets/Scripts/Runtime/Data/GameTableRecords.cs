@@ -13,6 +13,7 @@ public sealed class SessionData
     public float timeoutCoreDamagePerEnemy;
     public int startScrap;
     public int defaultSeed;
+    public float[] speedOptions;
 }
 
 [Serializable]
@@ -35,6 +36,7 @@ public sealed class SurvivorCombatData
 {
     public float moveSpeed;
     public float attackRange;
+    public float attackRangePerCombat;
     public float attackInterval;
     public float baseDamage;
     public float damagePerCombat;
