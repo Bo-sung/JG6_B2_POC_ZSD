@@ -1,6 +1,8 @@
 # POC 밸런스 조정·수락 판정 보고 (task_6c6a8402ae5c)
 
 > 스크립트 전략 비교 결과다. 사람 플레이테스트 결과가 아니다. 본문의 근거 폴더와 JSONL은 작업 PC의 임시 경로에 있어 저장소에 포함되지 않는다.
+>
+> **이 보고 이후 변경(DEC-34):** 사거리를 고정 10m에서 `8 + 0.7 × 전투`로 바꿨다. 5개 전략을 시드 2개(12345, 24680)로 다시 돌린 결과, 시설 위치 차이(`focus_noexp` 승 대 `pos_focus_core` 패)와 W3 파견 차이(`focus_noexp` 승 대 `focus_far3` 패)는 유지됐다. `pos_focus_core`의 패배 시점만 W1에서 W2로 늦어졌다. 아래 본문의 5개 시드 행렬은 변경 전 값이며 다시 돌리지 않았다.
 
 - 브랜치 `feature/poc-core`, 커밋·푸시 없음. 최종 값은 `Assets/Resources/Tables/GameplayTableData.json`에 반영했다.
 - 근거 폴더(이하 `S`): `C:\Users\Krafton\AppData\Local\Temp\claude\C--Gits-JG6-B2-POC-ZSD\8595c4db-de5f-4e07-9633-f085e00a604a\scratchpad`
