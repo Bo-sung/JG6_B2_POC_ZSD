@@ -19,12 +19,14 @@ public sealed class HudPresenter
         string countdown = HasTimer(session.Phase) ? $"{Mathf.CeilToInt(session.PhaseRemaining)}초" : "-";
         string scrap = $"스크랩 {session.Scrap}";
         string core = $"핵심 시설 {Mathf.CeilToInt(session.Core.Hp)}/{Mathf.CeilToInt(session.Core.MaxHp)}";
+        string headcount = ExpeditionLabels.Headcount(session.AliveCount, session.Capacity, session.AwayCount, session.Recruitment.ReservedSlots);
+        string injury = $"부상 {session.CountInjury(InjuryStatus.Light)} · 중상 {session.CountInjury(InjuryStatus.Critical)}";
         // 인원 현재/최대는 파견·중상 인원을 포함한 살아 있는 수 기준이다.
         view.ShowSpeed(session.SpeedOptions, session.Speed);
         view.ShowVisitorNotice(session.Recruitment.PendingVisitor != null);
         view.ShowExpeditionEventNotice(session.Expeditions.PendingEventCount, EventNoticeLabel());
         view.ShowTreatment(TreatmentLabel(session.Treatment.Current));
-        view.Show(wave, countdown, scrap, core, ExpeditionLabels.Headcount(session.AliveCount, session.Capacity, session.AwayCount, session.Recruitment.ReservedSlots));
+        view.Show(wave, countdown, scrap, core, headcount, injury);
     }
 
     // 먼저 만료되는 사건의 남은 초를 함께 보여 준다. 패널을 자동으로 열지 않는다(TD-35).

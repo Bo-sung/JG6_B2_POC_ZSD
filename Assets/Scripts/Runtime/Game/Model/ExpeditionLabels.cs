@@ -43,6 +43,19 @@ public static class ExpeditionLabels
         _ => "적대 생물 조우",
     };
 
+    // 세션 결과 화면의 사건 결과 이름.
+    public static string OutcomeLabel(string _outcome) => _outcome switch
+    {
+        ExpeditionEvent.OUTCOME_RESCUE_SUCCESS => "구조 성공",
+        ExpeditionEvent.OUTCOME_RESCUE_FAILED => "구조 실패",
+        ExpeditionEvent.OUTCOME_SEARCH_SAFE => "보급품 확보",
+        ExpeditionEvent.OUTCOME_SEARCH_HURT => "수색 피해",
+        ExpeditionEvent.OUTCOME_ENCOUNTER => "적대 조우",
+        ExpeditionEvent.OUTCOME_WITHDRAWN => "철수",
+        ExpeditionEvent.OUTCOME_CONTINUED => "임무 계속",
+        _ => _outcome,
+    };
+
     // 왜 일어났는지. 파견된 지역에서 벌어진 일로 설명한다(기준서 4.4).
     public static string EventReason(ExpeditionEventType _type, string _regionName) => _type switch
     {

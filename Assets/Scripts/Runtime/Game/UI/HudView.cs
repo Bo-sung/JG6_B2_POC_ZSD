@@ -1,6 +1,6 @@
 using UnityEngine;
 
-// 상단 HUD. 웨이브·카운트다운·스크랩·핵심 시설 HP·생존자 수.
+// 상단 HUD. 웨이브·카운트다운·스크랩·핵심 시설 HP·생존자 수·부상 수.
 [DisallowMultipleComponent]
 public sealed class HudView : MonoBehaviour
 {
@@ -9,6 +9,8 @@ public sealed class HudView : MonoBehaviour
     [SerializeField] UnityEngine.UI.Text scrapText;
     [SerializeField] UnityEngine.UI.Text coreText;
     [SerializeField] UnityEngine.UI.Text survivorText;
+    // TD-53: 부상·중상 인원 표시.
+    [SerializeField] UnityEngine.UI.Text injuryText;
     // 방문 대기 중에만 켜지는 '방문자 도착' 항목.
     [SerializeField] UnityEngine.UI.Button visitorButton;
     // 대기 중인 탐사 사건이 있을 때만 켜지는 경고. 탐사 패널은 항상 보이므로 누를 것이 없다(TD-35).
@@ -48,13 +50,14 @@ public sealed class HudView : MonoBehaviour
         }
     }
 
-    public void Show(string _wave, string _countdown, string _scrap, string _core, string _survivors)
+    public void Show(string _wave, string _countdown, string _scrap, string _core, string _survivors, string _injury)
     {
         waveText.text = _wave;
         countdownText.text = _countdown;
         scrapText.text = _scrap;
         coreText.text = _core;
         survivorText.text = _survivors;
+        injuryText.text = _injury;
     }
 
     public void ShowTreatment(string _label)

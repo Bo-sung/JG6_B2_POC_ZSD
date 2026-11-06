@@ -9,7 +9,7 @@ public sealed class GameTableRules
 {
     // POC 시스템 크기. 수치 조정이 아닌 범위 변경이므로 테이블에 두지 않는다(POC_CORE.md 0절 6항).
     const int SURVIVOR_COUNT = 7;
-    const int WAVE_COUNT = 3;
+    const int WAVE_COUNT = 6;
     const int EXPEDITION_REGION_COUNT = 2;
     const int STAT_MIN = 1;
     const int STAT_MAX = 5;
@@ -225,8 +225,7 @@ public sealed class GameTableRules
     }
 
     // 인력 수급. 후보는 방문 몫과 구조 몫에 쓰이므로 방문 수 이상이 필요하고(V2-IMPL-09),
-    // 초기 인원은 capacity 안에 들어와야 한다. 방문 웨이브가 현재 웨이브 수를 넘는 것은
-    // G5(6웨이브)까지 열려 있는 값이므로 여기서 막지 않는다.
+    // 초기 인원은 capacity 안에 들어와야 한다. 방문 웨이브는 실제로 도달해야 하므로 웨이브 수를 넘을 수 없다.
     void ValidateRecruitment(GameplayTableData _gameplay)
     {
         var data = _gameplay.recruitment;
@@ -240,10 +239,12 @@ public sealed class GameTableRules
         Nonnegative(data.visitorCost, "Gameplay.recruitment.visitorCost");
         var waves = data.visitorWaves ?? Array.Empty<int>();
         Check(waves.Length > 0, "Gameplay.recruitment.visitorWaves", "방문 웨이브가 필요합니다.");
+        int waveCount = (_gameplay.waves ?? Array.Empty<WaveData>()).Length;
         var seenWaves = new HashSet<int>();
         foreach (int wave in waves)
         {
             Check(wave >= 1, "Gameplay.recruitment.visitorWaves", "웨이브 번호는 1 이상이어야 합니다.");
+            Check(wave <= waveCount, "Gameplay.recruitment.visitorWaves", $"방문 웨이브는 웨이브 수({waveCount}) 이하여야 합니다.");
             Check(seenWaves.Add(wave), "Gameplay.recruitment.visitorWaves", "방문 웨이브가 중복되었습니다.");
         }
 
@@ -367,6 +368,8 @@ public sealed class GameTableRules
             Nonnegative(waves[i].spawnInterval, path + ".spawnInterval");
             var spawns = waves[i].spawns ?? Array.Empty<WaveSpawnData>();
             Check(spawns.Length > 0, path + ".spawns", "스폰이 비어 있습니다.");
+            bool usesWest = false;
+            bool usesEast = false;
             foreach (var spawn in spawns)
             {
                 if (spawn == null)
@@ -377,7 +380,11 @@ public sealed class GameTableRules
                 Reference(spawn.enemyId, path + ".enemyId", enemies.ContainsKey(spawn.enemyId ?? string.Empty), "적");
                 Check(spawn.lane == "west" || spawn.lane == "east", path + ".lane", "west 또는 east여야 합니다.");
                 Positive(spawn.count, path + ".count");
+                usesWest |= spawn.lane == "west";
+                usesEast |= spawn.lane == "east";
             }
+            // 두 진입로를 모두 쓰지 않는 웨이브는 고정 자세를 시험하지 못한다(TD-50).
+            Check(usesWest && usesEast, path, "west와 east 진입로를 모두 사용해야 합니다.");
         }
     }
 

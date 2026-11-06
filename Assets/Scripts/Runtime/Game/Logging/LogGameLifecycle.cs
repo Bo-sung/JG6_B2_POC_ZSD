@@ -5,6 +5,7 @@ public sealed class LogGameLifecycle : MonoBehaviour
 {
     LogSession session;
     double elapsed;
+    int currentSeed;
 
     void OnEnable()
     {
@@ -79,6 +80,7 @@ public sealed class LogGameLifecycle : MonoBehaviour
     {
         Close();
         elapsed = 0;
+        currentSeed = _info.seed;
         session = new LogSession(FileLogStore.CreateDefault());
         Write("SessionStart", new Dictionary<string, object>
         {
@@ -165,7 +167,7 @@ public sealed class LogGameLifecycle : MonoBehaviour
     {
         Write("WaveEnded", new Dictionary<string, object>
         {
-            { "index", _info.waveIndex }, { "coreHP", _info.coreHp }, { "alive", _info.alive }, { "scrap", _info.scrap }
+            { "index", _info.waveIndex }, { "coreHP", _info.coreHp }, { "alive", _info.alive }, { "injured", _info.injured }, { "recruited", _info.recruited }, { "scrap", _info.scrap }
         });
     }
 
@@ -269,7 +271,7 @@ public sealed class LogGameLifecycle : MonoBehaviour
 
     void OnSessionEnded(GameEvents.SessionEndInfo _info)
     {
-        Write("SessionEnded", new Dictionary<string, object> { { "result", _info.result.ToString() }, { "reason", _info.reason } });
+        Write("SessionEnded", new Dictionary<string, object> { { "result", _info.result.ToString() }, { "reason", _info.reason }, { "seed", _info.seed } });
         Close();
     }
 
@@ -285,7 +287,7 @@ public sealed class LogGameLifecycle : MonoBehaviour
 
     void EndForQuit()
     {
-        OnSessionEnded(new GameEvents.SessionEndInfo(SessionResult.None, "quit"));
+        OnSessionEnded(new GameEvents.SessionEndInfo(SessionResult.None, "quit", currentSeed));
     }
 }
 

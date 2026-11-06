@@ -113,6 +113,33 @@
         { "enemyId": "breaker", "lane": "west", "count": 1 },
         { "enemyId": "breaker", "lane": "east", "count": 2 }
       ]
+    },
+    {
+      "spawnInterval": 0.4,
+      "spawns": [
+        { "enemyId": "basic", "lane": "west", "count": 6 },
+        { "enemyId": "basic", "lane": "east", "count": 3 },
+        { "enemyId": "breaker", "lane": "west", "count": 1 },
+        { "enemyId": "breaker", "lane": "east", "count": 2 }
+      ]
+    },
+    {
+      "spawnInterval": 0.4,
+      "spawns": [
+        { "enemyId": "basic", "lane": "west", "count": 4 },
+        { "enemyId": "basic", "lane": "east", "count": 6 },
+        { "enemyId": "breaker", "lane": "west", "count": 3 },
+        { "enemyId": "breaker", "lane": "east", "count": 1 }
+      ]
+    },
+    {
+      "spawnInterval": 0.4,
+      "spawns": [
+        { "enemyId": "basic", "lane": "west", "count": 6 },
+        { "enemyId": "basic", "lane": "east", "count": 6 },
+        { "enemyId": "breaker", "lane": "west", "count": 2 },
+        { "enemyId": "breaker", "lane": "east", "count": 3 }
+      ]
     }
   ],
   "expeditions": [

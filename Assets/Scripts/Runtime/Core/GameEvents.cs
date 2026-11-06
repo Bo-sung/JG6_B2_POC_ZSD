@@ -65,10 +65,13 @@ public static class GameEvents
     {
         public readonly SessionResult result;
         public readonly string reason;
-        public SessionEndInfo(SessionResult _result, string _reason)
+        // 기준서 7.4의 SessionEnded(result, seed). 재시작 재현에 쓴다.
+        public readonly int seed;
+        public SessionEndInfo(SessionResult _result, string _reason, int _seed = 0)
         {
             result = _result;
             reason = _reason;
+            seed = _seed;
         }
     }
     public readonly struct PhaseInfo
@@ -179,12 +182,16 @@ public static class GameEvents
     {
         public readonly int waveIndex, alive, scrap;
         public readonly float coreHp;
-        public WaveEndInfo(int _waveIndex, float _coreHp, int _alive, int _scrap)
+        // 기준서 7.4의 WaveEnded(index, alive, injured, recruited, scrap). injured는 경상+중상 수(TD-52).
+        public readonly int injured, recruited;
+        public WaveEndInfo(int _waveIndex, float _coreHp, int _alive, int _scrap, int _injured, int _recruited)
         {
             waveIndex = _waveIndex;
             coreHp = _coreHp;
             alive = _alive;
             scrap = _scrap;
+            injured = _injured;
+            recruited = _recruited;
         }
     }
     public readonly struct SurvivorDeathInfo
@@ -358,7 +365,7 @@ public static class GameEvents
     public static event Action<StatImprovedInfo> StatImproved;
 
     public static void RaiseSessionStarted(int _seed) => Emit(SessionStarted, new SessionStartInfo(_seed));
-    public static void RaiseSessionEnded(SessionResult _result, string _reason) => Emit(SessionEnded, new SessionEndInfo(_result, _reason));
+    public static void RaiseSessionEnded(SessionResult _result, string _reason, int _seed) => Emit(SessionEnded, new SessionEndInfo(_result, _reason, _seed));
     public static void RaisePhaseChanged(SessionPhase _phase, int _waveIndex) => Emit(PhaseChanged, new PhaseInfo(_phase, _waveIndex));
     public static void RaiseAssignmentChanged(string _survivorId, string _work, string _defense) => Emit(AssignmentChanged, new AssignmentInfo(_survivorId, _work, _defense));
     public static void RaiseExpeditionStarted(string _regionId, string[] _party, int _expeditionId = 0) => Emit(ExpeditionStarted, new ExpeditionStartInfo(_regionId, _party, _expeditionId));
@@ -368,7 +375,7 @@ public static class GameEvents
     public static void RaiseExpeditionEventResolved(int _expeditionId, string _outcome) => Emit(ExpeditionEventResolved, new ExpeditionEventResolvedInfo(_expeditionId, _outcome));
     public static void RaiseBuildingPlaced(BuildingType _type, Vector3 _position, int _cost, string _id = null) => Emit(BuildingPlaced, new BuildingInfo(_type, _position, _cost, _id));
     public static void RaiseWaveStarted(int _waveIndex) => Emit(WaveStarted, new WaveStartInfo(_waveIndex));
-    public static void RaiseWaveEnded(int _waveIndex, float _coreHp, int _alive, int _scrap) => Emit(WaveEnded, new WaveEndInfo(_waveIndex, _coreHp, _alive, _scrap));
+    public static void RaiseWaveEnded(int _waveIndex, float _coreHp, int _alive, int _scrap, int _injured, int _recruited) => Emit(WaveEnded, new WaveEndInfo(_waveIndex, _coreHp, _alive, _scrap, _injured, _recruited));
     public static void RaiseSurvivorDied(string _survivorId, string _cause) => Emit(SurvivorDied, new SurvivorDeathInfo(_survivorId, _cause));
     public static void RaiseVisitorArrived(string _candidateId, int _wave) => Emit(VisitorArrived, new VisitorArrivedInfo(_candidateId, _wave));
     public static void RaiseRecruitmentAccepted(string _candidateId, int _cost, int _aliveCount) => Emit(RecruitmentAccepted, new RecruitmentAcceptedInfo(_candidateId, _cost, _aliveCount));

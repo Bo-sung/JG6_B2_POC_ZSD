@@ -5,7 +5,7 @@
 ## 구현 순서
 
 1. **수직 슬라이스:** 생존자 선택·명령 → 작업/방어 이중 배정 → 경보 자동 전환 → 실시간 전투 → 영구 사망 이월. Game 씬에서 플레이 검증한다.
-2. **루프 완결:** 생산 → 방벽/감시탑 → 오프맵 탐사 → 3웨이브 → 승패·재시작 → Preload/Title → 로그 → 나머지 UI.
+2. **루프 완결:** 생산 → 방벽/감시탑 → 오프맵 탐사 → 6웨이브 → 승패·재시작 → Preload/Title → 로그 → 나머지 UI.
 3. **검증:** `POC_CORE.md` 7절 수락 조건별 플레이 근거, 수치 검증 조건 3개, 코드 리뷰.
 
 ## 폴더와 책임
@@ -22,6 +22,7 @@
 | `Game/Model` | `RecruitmentSystem` | 인력 수급: 수용 상한 판정(살아 있는 인원+예약 < capacity), 방문 후보 추첨, 신규 ID 발급, 방문 상태. G3 구조 예약 API 포함 |
 | `Game/Model` | `InjuryRules` | HP에서 부상 상태 파생, 효율, 적 표적 우선순위. 수치는 `injury` 테이블 |
 | `Game/Model` | `TreatmentSystem` | 치료 1건의 시작 조건, 진행률, 일시정지·재개·담당자 교체, 비용 1회 차감. 시간은 호출 측이 넘긴다 |
+| `Game/Model` | `SessionRecord` | 세션 누적 기록: 추가·사망 인력, 성장, 방문 결과, 사건 결과 건수 |
 | `Game/Model` | `SessionRng` | 시드 하나에서 용도별 독립 `System.Random` 생성 |
 | `Game/Session` | `GameSession` | 단계 전환, 웨이브 번호, 승패, 하위 시스템 소유 |
 | `Game/Session` | `SessionLaunch` | Title에서 Game으로 시드 전달. Game 직접 실행 시 기본값 |
@@ -42,7 +43,7 @@
 ## 단계와 시간
 
 ```text
-Prep(100초) → Alert(10초) → Combat(최대 100초) → Result(확인 대기) → Prep … 3웨이브 후 승리
+Prep(140초) → Alert(6초) → Combat(최대 120초) → Result(확인 대기) → Prep … 마지막 웨이브 결과 확인 후 승리
 ```
 
 | 단계 | 생산 | 탐사 타이머 | 건설 | 파견 시작 | 배정 변경 |
@@ -56,6 +57,8 @@ Prep(100초) → Alert(10초) → Combat(최대 100초) → Result(확인 대기
 - Combat 시작: `WaveDirector`가 스폰한다. 전원 처치 또는 시간 상한(DEC-15)으로 끝난다.
 - Result 진입: HP를 회복하지 않는다(v2가 DEC-09를 오버라이드). 확인을 누르면 다음 Prep으로 가고 인력은 작업 배정으로 복귀한다.
 - 패배: 핵심 시설 HP 0 또는 파견 포함 전원 사망(DEC-14). 어느 단계에서든 즉시 판정한다.
+- 웨이브 수는 코드 상수가 아니라 `table.waves.Length`를 따른다. `GameTableRules`가 6개인지, 웨이브마다 두 진입로를 다 쓰는지, 방문 웨이브가 웨이브 수 안인지 검증한다.
+- 승패 우선순위(기준서 7.2 항목 8): 승리는 마지막 웨이브의 결과 패널을 확인할 때만 난다. 같은 틱에 클리어와 코어 파괴·전멸이 겹치면 `TickSession`이 결과 단계에 들어가도 끝의 `CheckDefeat`가 패배로 끝내므로 확인할 기회가 없다. 사유는 코어 파괴가 전멸보다 먼저다.
 
 ## 생존자 행동
 
@@ -114,6 +117,14 @@ Prep 중 직접 이동한 인력은 생산에 기여하지 않고, 선택 패널
 - **단위 반영:** `SurvivorUnit`은 `GameEvents.StatImproved`를 구독해 몸체 색상(전문 분야), 무기 크기(전투), 사거리 표식을 즉시 갱신한다. `AttackRange`와 `DamagePerSecond`는 `State.Combat`을 직접 읽어 즉시 반영된다.
 - **특성 곱의 한 곳:** `TraitRules`를 통해 `marksman`(전투 ×1.2), `foreman`(작업 ×1.2), `scout`(탐사 ×1.2)이 `SurvivorState`의 각 효율(`CombatEfficiency`, `WorkEfficiency`, `ExplorationEfficiency`)에서 부상 효율과 곱해진다. 사거리·이동 속도·표시 능력치에는 곱하지 않는다. `scout` 위험 감소(사망률·사건 피해 확률·조우 피해율 ×0.8)는 `ExpeditionEventRules` 및 `ExpeditionSystem`에서 판정하며, 파티에 여러 명이 있어도 중첩되지 않는다.
 - **이벤트·로그:** `ExperienceGained(id, stat, amount)` 및 `StatImproved(id, stat, old, new)`를 발행하고 `LogGameLifecycle`에서 로깅한다.
+
+## 6웨이브와 결과 (G5)
+
+- **이월.** 웨이브 사이에 지우는 것은 웨이브 한정 기록(`deathsThisWave`, `growthsThisWave`, `joinedThisWave`, 탐사 결과 목록, 파괴 수)과 웨이브당 XP 상한뿐이다. 인력, HP, XP, 특성, 배정, 스크랩, 시설 HP, 진행 중 탐사, 일시정지된 치료는 그대로 간다.
+- **세션 기록.** `SessionRecord`(Model)가 추가·사망 인력, 성장, 방문 결과, 사건 결과 건수를 모은다. 초기 인원은 테이블에서 받고 최종 인원은 `AliveCount`를 읽으므로 `초기 + 추가 − 사망 = 최종`은 저장값이 아니라 테스트로 고정한 항등식이다. 성장은 인력·능력치별로 처음→마지막 값을 합치고(TD-96), 사건은 결과별 건수로 줄여(TD-97) 문자열 길이가 세션 길이에 비례하지 않는다.
+- **결과 패널.** `ResultPresenter`가 웨이브 결과(부상·사망·충원·성장·시설 피해·다음 운영 공백)와 세션 결과(승리·패배 공통)를 기존 `ResultPanelView`에 넣는다. 다음 운영 공백은 지금 상태에서 읽는 중상 대기, 치료 상태, `MaxWorkers − ActiveWorkerCount`의 생산 공백이다(TD-99).
+- **HUD.** `부상 n · 중상 n`은 `CountInjury`로 파생한다. 웨이브 표시는 `WaveCount`를 쓴다.
+- **로그.** `WaveEnded`에 `injured`·`recruited`, `SessionEnded`에 `seed`를 넣었다(TD-52). 기존 `coreHP`, `reason`은 남긴다.
 
 ## 이벤트
 

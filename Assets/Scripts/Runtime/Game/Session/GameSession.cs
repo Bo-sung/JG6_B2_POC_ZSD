@@ -17,8 +17,12 @@ public readonly struct WaveSummary
     public readonly int destroyedBuildings;
     public readonly int damagedBuildings;
     public readonly string[] growths;
+    // 이번 웨이브 충원(TD-52 recruited)과 부상 수. 부상은 경상·중상으로 나뉜다.
+    public readonly string[] joined;
+    public readonly int injuredLight;
+    public readonly int injuredCritical;
 
-    public WaveSummary(int _waveNumber, float _coreHp, int _alive, int _scrap, string[] _deaths, int _timedOutEnemies, float _timeoutDamage, ExpeditionOutcome[] _expeditions = null, int _destroyedBuildings = 0, int _damagedBuildings = 0, string[] _growths = null)
+    public WaveSummary(int _waveNumber, float _coreHp, int _alive, int _scrap, string[] _deaths, int _timedOutEnemies, float _timeoutDamage, ExpeditionOutcome[] _expeditions = null, int _destroyedBuildings = 0, int _damagedBuildings = 0, string[] _growths = null, string[] _joined = null, int _injuredLight = 0, int _injuredCritical = 0)
     {
         waveNumber = _waveNumber;
         coreHp = _coreHp;
@@ -31,6 +35,9 @@ public readonly struct WaveSummary
         destroyedBuildings = _destroyedBuildings;
         damagedBuildings = _damagedBuildings;
         growths = _growths ?? Array.Empty<string>();
+        joined = _joined ?? Array.Empty<string>();
+        injuredLight = _injuredLight;
+        injuredCritical = _injuredCritical;
     }
 }
 
@@ -130,6 +137,10 @@ public sealed class GameSession : MonoBehaviour
     }
     readonly List<string> deathsThisWave = new List<string>();
     readonly List<string> growthsThisWave = new List<string>();
+    // 이번 웨이브에 합류한 인력. WaveEnded의 recruited와 결과 화면 충원 표시에 쓴다(TD-52).
+    readonly List<string> joinedThisWave = new List<string>();
+    // 세션 누적 기록. Awake가 초기 인원 수로 다시 만든다(기준서 4.5).
+    SessionRecord record = new SessionRecord(0);
 
     public int Seed => seed;
     public SessionPhase Phase => flow.Phase;
@@ -141,6 +152,7 @@ public sealed class GameSession : MonoBehaviour
     public int Scrap => economy.Scrap;
     public string EndReason { get; private set; } = string.Empty;
     public WaveSummary LastWave { get; private set; }
+    public SessionRecord Record => record;
 
     public CoreFacility Core => core;
     public ProductionFacility Production => production;
@@ -244,6 +256,7 @@ public sealed class GameSession : MonoBehaviour
         recruitment = new RecruitmentSystem(table.recruitment, rng.For(STREAM_RECRUIT));
         experienceTracker = new ExperienceTracker(table.experience, _id => FindUnit(_id)?.State);
         core.Initialize(table.core.maxHp);
+        record = new SessionRecord(table.survivors.Length);
         BindProduction();
         BindInfirmary();
         waveDirector.Initialize(this, rng.For(STREAM_WAVE));
@@ -287,6 +300,7 @@ public sealed class GameSession : MonoBehaviour
         string name = unit != null && unit.State != null ? unit.State.DisplayName : _info.id;
         string statName = ExperienceTracker.StatDisplayName(TraitRules.ParseStat(_info.stat));
         growthsThisWave.Add($"{name} {statName} {_info.old}→{_info.@new}");
+        record.RecordGrowth(_info.id, name, statName, _info.old, _info.@new);
         // 사거리가 바뀌었다. 감시탑 보너스와 범위 중심은 배정에서 계산해야 맞는다.
         if (unit != null)
         {
@@ -393,6 +407,7 @@ public sealed class GameSession : MonoBehaviour
     {
         deathsThisWave.Clear();
         growthsThisWave.Clear();
+        joinedThisWave.Clear();
         expeditionsThisWave.Clear();
         destroyedThisWave = 0;
         experienceTracker?.ResetWave();
@@ -433,6 +448,7 @@ public sealed class GameSession : MonoBehaviour
         if (expired != null)
         {
             GameEvents.RaiseRecruitmentRejected(RecruitmentSystem.REASON_EXPIRED);
+            record.RecordVisitorOutcome(expired.Wave, expired.Candidate.displayName, "만료");
         }
         // 치료는 진행률을 보존하고 멈춘다. 담당자와 경상 환자는 아래에서 방어로 가고, 중상 환자는 움직이지 않는다.
         if (treatment.Pause())
@@ -465,7 +481,7 @@ public sealed class GameSession : MonoBehaviour
         if (core.IsDestroyed)
         {
             StoreSummary(remaining, damage);
-            GameEvents.RaiseWaveEnded(flow.WaveNumber, core.Hp, AliveCount, economy.Scrap);
+            RaiseWaveEnded();
             EndSession(SessionResult.Defeat, REASON_CORE);
             return;
         }
@@ -485,15 +501,36 @@ public sealed class GameSession : MonoBehaviour
         }
         StoreSummary(_timedOutEnemies, _timeoutDamage);
         GameEvents.RaisePhaseChanged(flow.Phase, flow.WaveNumber);
-        GameEvents.RaiseWaveEnded(flow.WaveNumber, core.Hp, AliveCount, economy.Scrap);
+        RaiseWaveEnded();
+    }
+
+    // 웨이브 종료 로그의 한 곳. injured는 경상+중상, recruited는 이번 웨이브에 합류한 수다(TD-52).
+    void RaiseWaveEnded()
+    {
+        int injured = CountInjury(InjuryStatus.Light) + CountInjury(InjuryStatus.Critical);
+        GameEvents.RaiseWaveEnded(flow.WaveNumber, core.Hp, AliveCount, economy.Scrap, injured, joinedThisWave.Count);
     }
 
     void StoreSummary(int _timedOutEnemies, float _timeoutDamage)
     {
-        LastWave = new WaveSummary(flow.WaveNumber, core.Hp, AliveCount, economy.Scrap, deathsThisWave.ToArray(), _timedOutEnemies, _timeoutDamage, expeditionsThisWave.ToArray(), DestroyedThisWave, DamagedBuildings, growthsThisWave.ToArray());
+        LastWave = new WaveSummary(
+            flow.WaveNumber,
+            core.Hp,
+            AliveCount,
+            economy.Scrap,
+            deathsThisWave.ToArray(),
+            _timedOutEnemies,
+            _timeoutDamage,
+            expeditionsThisWave.ToArray(),
+            DestroyedThisWave,
+            DamagedBuildings,
+            growthsThisWave.ToArray(),
+            joinedThisWave.ToArray(),
+            CountInjury(InjuryStatus.Light),
+            CountInjury(InjuryStatus.Critical));
     }
 
-    // 결과 화면의 다음 버튼. 세 번째 웨이브 뒤에는 승리로 끝난다.
+    // 결과 화면의 다음 버튼. 마지막 웨이브 뒤에는 승리로 끝난다.
     public void ConfirmResult()
     {
         if (flow.Phase != SessionPhase.Result)
@@ -523,7 +560,7 @@ public sealed class GameSession : MonoBehaviour
         if (flow.Phase == SessionPhase.Combat)
         {
             StoreSummary(0, 0);
-            GameEvents.RaiseWaveEnded(flow.WaveNumber, core.Hp, AliveCount, economy.Scrap);
+            RaiseWaveEnded();
         }
         EndSession(SessionResult.Defeat, reason);
         return true;
@@ -545,7 +582,7 @@ public sealed class GameSession : MonoBehaviour
             }
         }
         GameEvents.RaisePhaseChanged(flow.Phase, flow.WaveNumber);
-        GameEvents.RaiseSessionEnded(_result, _reason);
+        GameEvents.RaiseSessionEnded(_result, _reason, seed);
     }
 
     // 같은 시드와 초기 구성으로 Game 씬을 다시 연다.
@@ -553,7 +590,7 @@ public sealed class GameSession : MonoBehaviour
     {
         if (flow.Phase != SessionPhase.Ended)
         {
-            GameEvents.RaiseSessionEnded(SessionResult.None, REASON_RESTART);
+            GameEvents.RaiseSessionEnded(SessionResult.None, REASON_RESTART, seed);
         }
         SessionLaunch.SetSeed(seed);
         SceneManager.LoadScene(TableManager.Instance.RestartSceneOf(SceneManager.GetActiveScene().name));
@@ -948,6 +985,7 @@ public sealed class GameSession : MonoBehaviour
             if (_decision == ExpeditionDecision.Withdraw)
             {
                 expeditions.Withdraw(expedition);
+                record.RecordExpeditionOutcome(ExpeditionLabels.OutcomeLabel(ExpeditionEvent.OUTCOME_WITHDRAWN));
             }
             _error = null;
             return true;
@@ -984,6 +1022,7 @@ public sealed class GameSession : MonoBehaviour
                 break;
         }
         GameEvents.RaiseExpeditionEventResolved(_expeditionId, current.Outcome);
+        record.RecordExpeditionOutcome(ExpeditionLabels.OutcomeLabel(current.Outcome));
         SettleFinishedExpeditions();
         _error = null;
         return true;
@@ -1065,6 +1104,7 @@ public sealed class GameSession : MonoBehaviour
         bool hasScout = PartyHasScout(_expedition);
         HurtPartyMember(_expedition, ExpeditionEventRules.EncounterDamageFraction(data, PartyCombat(LivingParty(_expedition)), hasScout));
         GameEvents.RaiseExpeditionEventResolved(_expedition.expeditionId, current.Outcome);
+        record.RecordExpeditionOutcome(ExpeditionLabels.OutcomeLabel(current.Outcome));
         // 전멸이면 철수 기회 없이 이번 틱 끝에 정산된다.
         if (LivingParty(_expedition).Count > 0)
         {
@@ -1262,6 +1302,8 @@ public sealed class GameSession : MonoBehaviour
         unit.SetDefenseMarker(marker);
         RegisterSurvivor(survivor, unit, joinPoint.position, _defenseAssigned: false);
         RaiseAssignment(survivor.Id);
+        joinedThisWave.Add(survivor.DisplayName);
+        record.RecordJoin(survivor.DisplayName, _source);
         GameEvents.RaiseSurvivorJoined(survivor.Id, _source);
         if (flow.Phase == SessionPhase.Prep)
         {
@@ -1303,6 +1345,7 @@ public sealed class GameSession : MonoBehaviour
         }
         JoinSurvivor(visitor.Candidate, RecruitmentSystem.SOURCE_VISITOR);
         visitor.Status = VisitorStatus.Accepted;
+        record.RecordVisitorOutcome(visitor.Wave, visitor.Candidate.displayName, "영입");
         GameEvents.RaiseRecruitmentAccepted(visitor.Candidate.id, recruitment.VisitorCost, AliveCount);
         _error = null;
         return true;
@@ -1311,9 +1354,14 @@ public sealed class GameSession : MonoBehaviour
     // 방문자를 보낸다. 대기 중일 때만 거절로 기록된다.
     public bool DeclineVisitor()
     {
+        VisitorRecord visitor = recruitment.PendingVisitor;
         if (!recruitment.DeclineVisitor())
         {
             return false;
+        }
+        if (visitor != null)
+        {
+            record.RecordVisitorOutcome(visitor.Wave, visitor.Candidate.displayName, "거절");
         }
         GameEvents.RaiseRecruitmentRejected(RecruitmentSystem.REASON_DECLINED);
         return true;
@@ -1659,6 +1707,7 @@ public sealed class GameSession : MonoBehaviour
         if (unit != null)
         {
             deathsThisWave.Add(unit.State.DisplayName);
+            record.RecordDeath(unit.State.DisplayName);
         }
         OnTreatmentParticipantDied(_info.survivorId);
     }
